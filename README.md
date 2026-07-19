@@ -5,6 +5,8 @@ the physics, not from a filter.)_
 
 Live demo - https://cmdcolin.github.io/phosphene/
 
+[![Deploy](https://github.com/cmdcolin/phosphene/actions/workflows/deploy.yml/badge.svg)](https://github.com/cmdcolin/phosphene/actions/workflows/deploy.yml)
+
 Needs a WebGPU-enabled browser
 
 Real-time analog video glitch as **signal-level simulation**, not image filters.
