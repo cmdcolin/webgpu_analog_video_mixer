@@ -15,7 +15,7 @@ export function sweep(): OffscreenCanvas {
   for (let y = 0; y < ACTIVE_HEIGHT; y++) {
     for (let x = 0; x < ACTIVE_WIDTH; x++) {
       const i = (y * ACTIVE_WIDTH + x) * 4
-      let v = 0
+      let v: number
       if (y < ACTIVE_HEIGHT * 0.15) {
         v = (x / ACTIVE_WIDTH) * 255 // ramp
       } else if (y < ACTIVE_HEIGHT * 0.8) {
@@ -56,7 +56,7 @@ export function smpteBars(): OffscreenCanvas {
   })
   const by = topH + castH
   const bh = H - by
-  const bottom: Array<[string, number]> = [
+  const bottom: [string, number][] = [
     ['#00214c', 5 / 28], // -I
     ['#ffffff', 5 / 28], // 100% white
     ['#32006a', 5 / 28], // +Q

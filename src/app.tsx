@@ -182,7 +182,7 @@ function Slider(props: {
 
 type SourceMode = 'bars' | 'sweep' | 'file' | 'webcam'
 type SourceBMode = 'none' | 'bars' | 'sweep' | 'file'
-type Fatal = { title: string; body: string; kind: 'unavailable' | 'lost' }
+interface Fatal { title: string; body: string; kind: 'unavailable' | 'lost' }
 
 declare global {
   interface Window {
@@ -224,9 +224,9 @@ export function App() {
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
-      document.exitFullscreen()
+      document.exitFullscreen().catch(() => {})
     } else {
-      document.documentElement.requestFullscreen()
+      document.documentElement.requestFullscreen().catch(() => {})
     }
   }
 
@@ -286,7 +286,7 @@ export function App() {
             if (vurl !== null) {
               const v = makeVideo()
               v.src = vurl
-              v.play().then(() => engine.setVideoSource(v))
+              v.play().then(() => engine.setVideoSource(v)).catch(() => {})
               setSourceMode('file')
             }
             if (q.has('debug')) console.log('DEBUG engine ready')
@@ -320,6 +320,8 @@ export function App() {
           saveSlot(slot, engine.controls)
         } else {
           const stored = loadSlots()[String(slot)]
+          // loadSlots()'s type is optimistic; a slot may be empty at runtime.
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
           if (stored) applyControls({ ...DEFAULT_CONTROLS, ...stored })
         }
       }
@@ -353,10 +355,13 @@ export function App() {
     if (sourceMode === 'sweep' || sourceMode === 'webcam') q.push(`src=${sourceMode}`)
     if (sourceBMode === 'none' || sourceBMode === 'sweep') q.push(`srcb=${sourceBMode}`)
     const url = `${location.origin}${location.pathname}${q.length ? `?${q.join('&')}` : ''}`
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
-    })
+    navigator.clipboard
+      .writeText(url)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1200)
+      })
+      .catch(() => {})
   }
 
   const stopVideo = () => {
@@ -403,7 +408,7 @@ export function App() {
             (stream) => {
               const v = makeVideo()
               v.srcObject = stream
-              v.play().then(() => engine.setVideoSource(v))
+              v.play().then(() => engine.setVideoSource(v)).catch(() => {})
             },
             (e: unknown) => setError(`webcam: ${e instanceof Error ? e.message : String(e)}`),
           )
@@ -425,7 +430,7 @@ export function App() {
       } else {
         const v = makeVideo()
         v.src = URL.createObjectURL(file)
-        v.play().then(() => engine.setVideoSource(v))
+        v.play().then(() => engine.setVideoSource(v)).catch(() => {})
       }
     }
   }
@@ -470,7 +475,7 @@ export function App() {
       } else {
         const v = makeVideo(videoBRef)
         v.src = URL.createObjectURL(file)
-        v.play().then(() => engine.setVideoSourceB(v))
+        v.play().then(() => engine.setVideoSourceB(v)).catch(() => {})
       }
     }
   }
