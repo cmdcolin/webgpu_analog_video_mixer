@@ -278,13 +278,7 @@ export class Engine {
         layout: pl.getBindGroupLayout(0),
         entries: entries.map((resource, binding) => ({ binding, resource })),
       })
-    this.composeBg = bg(this.composePl, [
-      { buffer: this.paramsBuf },
-      this.srcTex.createView(),
-      this.outTex.createView(),
-      this.linearSamp,
-      this.inputTex.createView(),
-    ])
+    this.composeBg = this.makeComposeBg()
     this.encodeYuvBg = bg(this.encodeYuvPl, [this.inputTex.createView(), this.linearSamp, { buffer: this.yuvBuf }])
     this.encodeYuvBBg = bg(this.encodeYuvPl, [this.srcTexB.createView(), this.linearSamp, { buffer: this.yuvBBuf }])
     this.mixBBg = bg(this.mixBPl, [
@@ -422,6 +416,20 @@ export class Engine {
     }
   }
 
+  // srcTex is the only bind group that changes when the source raster resizes.
+  private makeComposeBg(): GPUBindGroup {
+    return this.gpu.device.createBindGroup({
+      layout: this.composePl.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: this.paramsBuf } },
+        { binding: 1, resource: this.srcTex.createView() },
+        { binding: 2, resource: this.outTex.createView() },
+        { binding: 3, resource: this.linearSamp },
+        { binding: 4, resource: this.inputTex.createView() },
+      ],
+    })
+  }
+
   private ensureSrcTex(w: number, h: number, aspect: number): void {
     this.srcAspect = aspect
     if (this.srcTex.width !== w || this.srcTex.height !== h) {
@@ -431,16 +439,7 @@ export class Engine {
         format: 'rgba8unorm',
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
       })
-      this.composeBg = this.gpu.device.createBindGroup({
-        layout: this.composePl.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: { buffer: this.paramsBuf } },
-          { binding: 1, resource: this.srcTex.createView() },
-          { binding: 2, resource: this.outTex.createView() },
-          { binding: 3, resource: this.linearSamp },
-          { binding: 4, resource: this.inputTex.createView() },
-        ],
-      })
+      this.composeBg = this.makeComposeBg()
     }
   }
 

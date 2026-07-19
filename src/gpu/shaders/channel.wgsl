@@ -13,8 +13,6 @@
 @group(0) @binding(5) var<storage, read> lineParams: array<vec4f>;
 @group(0) @binding(6) var<storage, read_write> outBuf: array<f32>;
 
-const DOWN_PER_SAMPLE = 0.20604395604;
-
 fn cosUp(row: u32, s: f32) -> f32 {
   let lp = lineParams[row];
   return cos(lp.y + lp.z + 2.0 * PI * fract(DOWN_PER_SAMPLE * s));

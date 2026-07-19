@@ -9,8 +9,6 @@
 @group(0) @binding(3) var<storage, read> lineParams: array<vec4f>;
 @group(0) @binding(4) var<storage, read_write> under: array<f32>;
 
-const DOWN_PER_SAMPLE = 0.20604395604; // (fsc - f_under) / sample_rate
-
 fn cosDown(row: u32, s: f32) -> f32 {
   return cos(lineParams[row].y + 2.0 * PI * fract(DOWN_PER_SAMPLE * s));
 }

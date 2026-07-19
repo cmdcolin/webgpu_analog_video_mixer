@@ -22,6 +22,7 @@ import {
   VSYNC_LAST,
 } from '../signal/constants'
 import { FILTER_STRIDE, SEC_CHROMA_BP, SEC_DEMOD, SEC_ENC_CHROMA, SEC_LUMA, SEC_UNDER } from '../signal/filters'
+import { DOWN_PER_SAMPLE } from '../signal/linestate'
 
 type ParamType = 'f32' | 'u32'
 
@@ -131,6 +132,7 @@ const SEC_DEMOD = ${SEC_DEMOD}u;
 const SEC_LUMA = ${SEC_LUMA}u;
 const SEC_CHROMA_BP = ${SEC_CHROMA_BP}u;
 const SEC_UNDER = ${SEC_UNDER}u;
+const DOWN_PER_SAMPLE = ${DOWN_PER_SAMPLE}; // (fsc - f_under) / sample_rate
 const PI = 3.14159265359;
 
 ${paramStruct}
