@@ -71,8 +71,14 @@ const dialogCardStyle: React.CSSProperties = {
 
 const sectionHeadStyle: React.CSSProperties = {
   fontSize: 11,
-  margin: '12px 0 2px',
-  color: '#8888a0',
+  margin: '10px 0 4px',
+  padding: '6px 8px',
+  color: '#b8b8d0',
+  background: '#232330',
+  border: '1px solid #3a3a4a',
+  borderRadius: 4,
+  letterSpacing: '0.05em',
+  fontWeight: 600,
   textTransform: 'uppercase',
   cursor: 'pointer',
   display: 'flex',
@@ -95,7 +101,7 @@ function Section(props: { title: string; children: React.ReactNode }) {
     <div>
       <h3 style={sectionHeadStyle} onClick={() => setOpen((o) => !o)}>
         <span>{props.title}</span>
-        <span style={{ color: '#5a5a66' }}>{open ? '▾' : '▸'}</span>
+        <span style={{ color: '#8a8aa8', fontSize: 13 }}>{open ? '▾' : '▸'}</span>
       </h3>
       {open ? props.children : null}
     </div>
