@@ -141,6 +141,7 @@ function Slider(props: {
 
 type SourceMode = 'bars' | 'sweep' | 'file' | 'webcam'
 type SourceBMode = 'none' | 'bars' | 'sweep' | 'file'
+type Fatal = { title: string; body: string; kind: 'unavailable' | 'lost' }
 
 declare global {
   interface Window {
@@ -156,12 +157,28 @@ export function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const fileInputBRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
-  const [fatal, setFatal] = useState('')
+  const [fatal, setFatal] = useState<Fatal | null>(null)
   const [fps, setFps] = useState(0)
   const [values, setValues] = useState({ ...DEFAULT_CONTROLS })
   const [sourceMode, setSourceMode] = useState<SourceMode>('bars')
   const [sourceBMode, setSourceBMode] = useState<SourceBMode>('bars')
   const [fullscreen, setFullscreen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [renderScale, setRenderScale] = useState(1)
+  const renderScaleRef = useRef(1)
+  const [res, setRes] = useState('')
+
+  // Backing-store size = css size × min(dpr,2) × render scale. Lowering the
+  // scale is a cheap speed lever (the present pass runs per output pixel).
+  const applyCanvasSize = () => {
+    const canvas = canvasRef.current
+    if (canvas) {
+      const dpr = Math.min(window.devicePixelRatio, 2) * renderScaleRef.current
+      canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr))
+      canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr))
+      setRes(`${canvas.width}×${canvas.height}`)
+    }
+  }
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
@@ -179,15 +196,10 @@ export function App() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (canvas) {
-      const resize = () => {
-        const dpr = window.devicePixelRatio
-        canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr))
-        canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr))
-      }
-      resize()
+      applyCanvasSize()
       // Keep the drawing buffer matched to the element as the panel hides or
       // the window enters fullscreen, so the picture never stretches.
-      const ro = new ResizeObserver(resize)
+      const ro = new ResizeObserver(applyCanvasSize)
       ro.observe(canvas)
       let disposed = false
       Engine.create(canvas).then(
@@ -198,6 +210,8 @@ export function App() {
             engineRef.current = engine
             window.vf = engine
             engine.onStats = setFps
+            engine.onDeviceLost = (m) =>
+              setFatal({ title: 'WebGPU device lost', body: m === '' ? 'The GPU device was lost.' : m, kind: 'lost' })
             engine.setImageSource(smpteBars())
             engine.setImageSourceB(smpteBars())
             const preset = new URLSearchParams(location.search).get('set')
@@ -222,7 +236,8 @@ export function App() {
             if (q.has('debug')) console.log('DEBUG engine ready')
           }
         },
-        (e: unknown) => setFatal(e instanceof Error ? e.message : String(e)),
+        (e: unknown) =>
+          setFatal({ title: 'WebGPU unavailable', body: e instanceof Error ? e.message : String(e), kind: 'unavailable' }),
       )
       return () => {
         disposed = true
@@ -263,6 +278,26 @@ export function App() {
   const setControl = (key: ControlKey, v: number) => {
     setValues((prev) => ({ ...prev, [key]: v }))
     engineRef.current?.setControl(key, v)
+  }
+
+  const setScale = (v: number) => {
+    renderScaleRef.current = v
+    setRenderScale(v)
+    applyCanvasSize()
+  }
+
+  // Serialize non-default controls into the ?set= URL the loader already reads.
+  const copyLink = () => {
+    const set = (Object.keys(DEFAULT_CONTROLS) as ControlKey[])
+      .filter((k) => values[k] !== DEFAULT_CONTROLS[k])
+      .map((k) => `${k}:${+values[k].toFixed(4)}`)
+    const q = [...(set.length ? [`set=${set.join(',')}`] : [])]
+    if (sourceMode === 'sweep' || sourceMode === 'webcam') q.push(`src=${sourceMode}`)
+    const url = `${location.origin}${location.pathname}${q.length ? `?${q.join('&')}` : ''}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    })
   }
 
   const stopVideo = () => {
@@ -368,22 +403,30 @@ export function App() {
     }
   }
 
-  return fatal !== '' ? (
+  return fatal !== null ? (
     <div style={fatalWrapStyle}>
       <div style={fatalCardStyle}>
-        <h1 style={{ fontSize: 18, margin: '0 0 12px', color: '#f66' }}>WebGPU unavailable</h1>
-        <p style={{ margin: '0 0 14px' }}>{fatal}</p>
-        <p style={{ margin: '0 0 14px', color: '#8888a0' }}>
-          This app renders the entire NTSC signal path in WebGPU compute shaders, so a WebGPU-capable browser with
-          working hardware acceleration is required — there is no 2D-canvas fallback.
-        </p>
-        <p style={{ margin: 0, color: '#8888a0' }}>
-          Check support at{' '}
-          <a href="https://caniuse.com/webgpu" style={{ color: '#7fd0a0' }} target="_blank" rel="noreferrer">
-            caniuse.com/webgpu
-          </a>
-          .
-        </p>
+        <h1 style={{ fontSize: 18, margin: '0 0 12px', color: '#f66' }}>{fatal.title}</h1>
+        <p style={{ margin: '0 0 14px' }}>{fatal.body}</p>
+        {fatal.kind === 'unavailable' ? (
+          <>
+            <p style={{ margin: '0 0 14px', color: '#8888a0' }}>
+              This app renders the entire NTSC signal path in WebGPU compute shaders, so a WebGPU-capable browser with
+              working hardware acceleration is required — there is no 2D-canvas fallback.
+            </p>
+            <p style={{ margin: 0, color: '#8888a0' }}>
+              Check support at{' '}
+              <a href="https://caniuse.com/webgpu" style={{ color: '#7fd0a0' }} target="_blank" rel="noreferrer">
+                caniuse.com/webgpu
+              </a>
+              .
+            </p>
+          </>
+        ) : (
+          <button style={{ ...btnStyle, borderColor: '#7fd0a0' }} onClick={() => location.reload()}>
+            reload
+          </button>
+        )}
       </div>
     </div>
   ) : (
@@ -408,12 +451,26 @@ export function App() {
             fontSize: 11,
           }}
         >
-          {fps.toFixed(0)} fps
+          {fps.toFixed(0)} fps · {res}
         </div>
       </div>
       {fullscreen ? null : (
         <div style={panelStyle}>
           <h2 style={{ fontSize: 13, margin: '4px 0 10px' }}>video_feedback — NTSC signal path</h2>
+
+          <Section title="Performance">
+            <Slider
+              label="render scale"
+              unit="x"
+              min={0.25}
+              max={2}
+              step={0.05}
+              value={renderScale}
+              defaultValue={1}
+              onChange={setScale}
+            />
+            <div style={{ color: '#666', margin: '2px 0' }}>lower = faster · {res}</div>
+          </Section>
 
           <Section title="Source">
             {(['bars', 'sweep', 'file', 'webcam'] as const).map((mode) => (
@@ -464,6 +521,9 @@ export function App() {
               onClick={() => applyControls({ ...DEFAULT_CONTROLS })}
             >
               reset all
+            </button>
+            <button style={{ ...btnStyle, borderColor: copied ? '#7fd0a0' : '#3a3a44' }} onClick={copyLink}>
+              {copied ? 'copied!' : 'copy link'}
             </button>
             <div style={{ color: '#666', margin: '4px 0' }}>keys 1-8 load slot, shift+1-8 save · f fullscreen</div>
           </Section>

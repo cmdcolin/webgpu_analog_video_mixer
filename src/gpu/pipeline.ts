@@ -118,6 +118,7 @@ const TAPS = {
 export class Engine {
   readonly controls: Controls = { ...DEFAULT_CONTROLS }
   onStats: (fps: number) => void = () => {}
+  onDeviceLost: (message: string) => void = () => {}
 
   private gpu: Gpu
   private canvas: HTMLCanvasElement
@@ -349,6 +350,14 @@ export class Engine {
     ])
     this.presentBg = bg(this.presentPl, [{ buffer: this.paramsBuf }, this.outTex.createView(), this.linearSamp])
 
+    // reason 'destroyed' is our own destroy(); anything else is a real loss
+    // (driver reset, sleep/wake, GPU hang) — stop and surface it.
+    this.gpu.device.lost.then((info) => {
+      if (this.running && info.reason !== 'destroyed') {
+        this.running = false
+        this.onDeviceLost(info.message)
+      }
+    })
     this.rafId = requestAnimationFrame(this.tick)
   }
 
