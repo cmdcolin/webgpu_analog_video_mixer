@@ -24,16 +24,31 @@ fn csrc(i: u32) -> f32 {
   return 0.5 * comp[i] - 0.25 * (up + dn);
 }
 
+// comb-filtered chroma source span for this workgroup's row; a whole
+// workgroup shares one raster row (and its sync offset), so the demod FIR
+// reads shared memory instead of 1-3 storage loads per tap
+var<workgroup> tile: array<f32, TILE>;
+
 @compute @workgroup_size(64, 1, 1)
-fn main(@builtin(global_invocation_id) gid: vec3u) {
-  if (gid.x >= ACTIVE_W || gid.y >= ACTIVE_H) {
-    return;
-  }
+fn main(
+  @builtin(global_invocation_id) gid: vec3u,
+  @builtin(local_invocation_id) lid: vec3u,
+  @builtin(workgroup_id) wid: vec3u,
+) {
   // roll wraps over the whole 525-line frame, so the VBI decodes as the
   // classic rolling black bar instead of the picture wrapping seamlessly
   let vroll = timing[525u];
   let row = (ACTIVE_TOP + gid.y + u32(vroll)) % NLINES;
   let hoff = i32(round(timing[row]));
+  let base = i32(row * SPL + ACTIVE_START + wid.x * 64u) + hoff - i32(HALO);
+  for (var i = lid.x; i < TILE; i = i + 64u) {
+    tile[i] = csrc(clampIdx(base + i32(i)));
+  }
+  workgroupBarrier();
+
+  if (gid.x >= ACTIVE_W || gid.y >= ACTIVE_H) {
+    return;
+  }
   let s = ACTIVE_START + gid.x;
   let n = clampIdx(i32(row * SPL + s) + hoff);
 
@@ -44,12 +59,12 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     return;
   }
 
-  let m = i32((P.demodTaps - 1u) / 2u);
+  let m = (DEMOD_TAPS - 1u) / 2u;
   var us = 0.0;
   var vs = 0.0;
-  for (var k = 0u; k < P.demodTaps; k = k + 1u) {
-    let ni = clampIdx(i32(n) + i32(k) - m);
-    let c = csrc(ni);
+  for (var k = 0u; k < DEMOD_TAPS; k = k + 1u) {
+    let ni = clampIdx(i32(n) + i32(k) - i32(m));
+    let c = tile[lid.x + HALO + k - m];
     let sc = carrier(ni, P.frame);
     let h = filters[SEC_DEMOD * FILTER_STRIDE + k];
     us = us + h * c * sc.x;

@@ -7,6 +7,7 @@ import {
   SEC_ENC_CHROMA,
   SEC_LUMA,
   SEC_UNDER,
+  TAPS,
   bandpass,
   lowpass,
   lowpassPeaked,
@@ -112,14 +113,6 @@ export type Controls = typeof DEFAULT_CONTROLS
 export type ControlKey = keyof Controls
 
 const FILTER_KEYS: ReadonlySet<string> = new Set(['encChromaMHz', 'demodMHz', 'lumaMHz', 'lumaPeak'])
-
-const TAPS = {
-  encChromaTaps: 33,
-  demodTaps: 41,
-  lumaTaps: 49,
-  chromaBpTaps: 55,
-  underTaps: 55,
-}
 
 // One compute dispatch in the signal chain. `when` gates the dispatch on the
 // current controls; omitted means always. Bind groups are fixed except
@@ -257,7 +250,7 @@ export class Engine {
 
     const module = (src: string) => {
       const m = d.createShaderModule({ code: PRELUDE + src })
-      m.getCompilationInfo().then((info) => {
+      void m.getCompilationInfo().then((info) => {
         for (const msg of info.messages) {
           if (msg.type === 'error') console.error(`WGSL ${msg.lineNum}:${msg.linePos} ${msg.message}`)
         }
@@ -357,14 +350,13 @@ export class Engine {
       pass(
         'chromaExtract',
         chromaExtractPl,
-        [{ buffer: this.paramsBuf }, { buffer: this.filterBuf }, { buffer: this.compA }, { buffer: this.chromaBuf }],
+        [{ buffer: this.filterBuf }, { buffer: this.compA }, { buffer: this.chromaBuf }],
         perLine,
       ),
       pass(
         'underDown',
         underDownPl,
         [
-          { buffer: this.paramsBuf },
           { buffer: this.filterBuf },
           { buffer: this.chromaBuf },
           { buffer: this.lineParamsBuf },
@@ -449,7 +441,7 @@ export class Engine {
 
     // reason 'destroyed' is our own destroy(); anything else is a real loss
     // (driver reset, sleep/wake, GPU hang) — stop and surface it.
-    this.gpu.device.lost.then((info) => {
+    void this.gpu.device.lost.then((info) => {
       if (this.running && info.reason !== 'destroyed') {
         this.running = false
         this.onDeviceLost(info.message)
@@ -501,7 +493,7 @@ export class Engine {
     if (w === ACTIVE_WIDTH && h === ACTIVE_HEIGHT && !(source instanceof HTMLVideoElement)) {
       d.queue.copyExternalImageToTexture({ source, flipY: false }, { texture: this.srcTexB }, [w, h])
     } else {
-      if (this.stageB === null) this.stageB = new OffscreenCanvas(ACTIVE_WIDTH, ACTIVE_HEIGHT)
+      this.stageB ??= new OffscreenCanvas(ACTIVE_WIDTH, ACTIVE_HEIGHT)
       const g = this.stageB.getContext('2d')
       if (g) {
         const wide = w / h > 4 / 3
@@ -581,11 +573,11 @@ export class Engine {
     const c = this.controls
     const bank = packFilterBank(
       new Map([
-        [SEC_ENC_CHROMA, lowpass(c.encChromaMHz * 1e6, TAPS.encChromaTaps)],
-        [SEC_DEMOD, lowpass(c.demodMHz * 1e6, TAPS.demodTaps)],
-        [SEC_LUMA, lowpassPeaked(c.lumaMHz * 1e6, c.lumaPeak, c.lumaMHz * 0.75e6, TAPS.lumaTaps)],
-        [SEC_CHROMA_BP, bandpass(FSC, 0.6e6, TAPS.chromaBpTaps)],
-        [SEC_UNDER, lowpass(1.2e6, TAPS.underTaps)],
+        [SEC_ENC_CHROMA, lowpass(c.encChromaMHz * 1e6, TAPS.encChroma)],
+        [SEC_DEMOD, lowpass(c.demodMHz * 1e6, TAPS.demod)],
+        [SEC_LUMA, lowpassPeaked(c.lumaMHz * 1e6, c.lumaPeak, c.lumaMHz * 0.75e6, TAPS.luma)],
+        [SEC_CHROMA_BP, bandpass(FSC, 0.6e6, TAPS.chromaBp)],
+        [SEC_UNDER, lowpass(1.2e6, TAPS.under)],
       ]),
     )
     this.gpu.device.queue.writeBuffer(this.filterBuf, 0, bank)
@@ -597,7 +589,6 @@ export class Engine {
     return {
       frame: this.frame,
       gen: 0,
-      ...TAPS,
       canvasW: this.canvas.width,
       canvasH: this.canvas.height,
       srcAspect: this.srcAspect,
@@ -686,7 +677,7 @@ export class Engine {
       const h = this.videoEl.videoHeight
       if (w > 0) {
         this.ensureSrcTex(w, h, w / h)
-        if (this.videoStage === null || this.videoStage.width !== w || this.videoStage.height !== h) {
+        if (this.videoStage?.width !== w || this.videoStage.height !== h) {
           this.videoStage = new OffscreenCanvas(w, h)
         }
         const g = this.videoStage.getContext('2d')
@@ -782,12 +773,12 @@ export class Engine {
     this.profiler?.report()
     if (this.frame < 3) {
       const f = this.frame
-      d.popErrorScope().then((e) => e && console.error(`frame ${f} internal:`, e.message))
-      d.popErrorScope().then((e) => e && console.error(`frame ${f} validation:`, e.message))
+      void d.popErrorScope().then((e) => e && console.error(`frame ${f} internal:`, e.message))
+      void d.popErrorScope().then((e) => e && console.error(`frame ${f} validation:`, e.message))
     }
     if (location.search.includes('debug')) {
       if (this.frame < 3) console.log('DEBUG rendered frame', this.frame)
-      if (this.frame === 1) this.debugReadback()
+      if (this.frame === 1) void this.debugReadback()
     }
     this.frame += 1
   }

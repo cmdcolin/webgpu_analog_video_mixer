@@ -21,19 +21,14 @@ import {
   VSYNC_FIRST,
   VSYNC_LAST,
 } from '../signal/constants'
-import { FILTER_STRIDE, SEC_CHROMA_BP, SEC_DEMOD, SEC_ENC_CHROMA, SEC_LUMA, SEC_UNDER } from '../signal/filters'
+import { FILTER_STRIDE, SEC_CHROMA_BP, SEC_DEMOD, SEC_ENC_CHROMA, SEC_LUMA, SEC_UNDER, TAPS } from '../signal/filters'
 import { DOWN_PER_SAMPLE } from '../signal/linestate'
 
 type ParamType = 'f32' | 'u32'
 
-export const PARAM_DEFS: ReadonlyArray<readonly [string, ParamType]> = [
+export const PARAM_DEFS: readonly (readonly [string, ParamType])[] = [
   ['frame', 'u32'],
   ['gen', 'u32'], // dub generation index: decorrelates noise/dropout seeds per pass
-  ['encChromaTaps', 'u32'],
-  ['demodTaps', 'u32'],
-  ['lumaTaps', 'u32'],
-  ['chromaBpTaps', 'u32'],
-  ['underTaps', 'u32'],
   ['canvasW', 'f32'],
   ['canvasH', 'f32'],
   ['srcAspect', 'f32'],
@@ -97,7 +92,7 @@ export const PARAM_DEFS: ReadonlyArray<readonly [string, ParamType]> = [
 export const PARAM_BYTES = Math.ceil((PARAM_DEFS.length * 4) / 16) * 16
 export const GEN_OFFSET = PARAM_DEFS.findIndex(([n]) => n === 'gen') * 4
 
-export function packParams(values: Record<string, number>, out: ArrayBuffer): void {
+export function packParams(values: Record<string, number | undefined>, out: ArrayBuffer): void {
   const dv = new DataView(out)
   PARAM_DEFS.forEach(([name, type], i) => {
     const v = values[name]
@@ -134,8 +129,18 @@ const SEC_DEMOD = ${SEC_DEMOD}u;
 const SEC_LUMA = ${SEC_LUMA}u;
 const SEC_CHROMA_BP = ${SEC_CHROMA_BP}u;
 const SEC_UNDER = ${SEC_UNDER}u;
+const ENC_CHROMA_TAPS = ${TAPS.encChroma}u;
+const DEMOD_TAPS = ${TAPS.demod}u;
+const LUMA_TAPS = ${TAPS.luma}u;
+const CHROMA_BP_TAPS = ${TAPS.chromaBp}u;
+const UNDER_TAPS = ${TAPS.under}u;
 const DOWN_PER_SAMPLE = ${DOWN_PER_SAMPLE}; // (fsc - f_under) / sample_rate
 const PI = 3.14159265359;
+// FIR tiling: each 64-thread workgroup stages its input span plus a
+// 32-sample halo per side in shared memory, so symmetric kernels up to
+// 65 taps read storage once per sample instead of once per tap.
+const TILE = 128u;
+const HALO = 32u;
 
 ${paramStruct}
 

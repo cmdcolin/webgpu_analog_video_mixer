@@ -7,6 +7,8 @@ export interface Gpu {
 export class WebGpuUnavailableError extends Error {}
 
 export async function initGpu(canvas: HTMLCanvasElement): Promise<Gpu> {
+  // the types say navigator.gpu always exists; browsers without WebGPU disagree
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!navigator.gpu) {
     throw new WebGpuUnavailableError(
       'This browser has no WebGPU support. Use Chrome/Edge 113+, or Firefox (stable 141+, or Nightly with dom.webgpu.enabled).',
@@ -23,7 +25,7 @@ export async function initGpu(canvas: HTMLCanvasElement): Promise<Gpu> {
     requiredFeatures: adapter.features.has('timestamp-query') ? ['timestamp-query'] : [],
   })
   device.addEventListener('uncapturederror', (e) => {
-    console.error('WebGPU uncaptured:', (e as GPUUncapturedErrorEvent).error.message)
+    console.error('WebGPU uncaptured:', (e).error.message)
   })
   const context = canvas.getContext('webgpu')
   if (!context) throw new Error('Could not get webgpu canvas context')

@@ -49,6 +49,16 @@ export function lowpassPeaked(cutoffHz: number, peak: number, peakHz: number, ta
   return h
 }
 
+// Fixed kernel lengths per section, baked into the WGSL prelude as constants
+// so every convolution loop has a compile-time trip count and can unroll.
+export const TAPS = {
+  encChroma: 33,
+  demod: 41,
+  luma: 49,
+  chromaBp: 55,
+  under: 55,
+}
+
 // The GPU filter bank: fixed-stride sections so shaders index kernels by slot.
 export const FILTER_STRIDE = 64
 export const SEC_ENC_CHROMA = 0 // encoder I/Q (U/V) bandlimit

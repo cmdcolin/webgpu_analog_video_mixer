@@ -53,10 +53,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   } else if (si >= BURST_START && si < BURST_START + BURST_LEN && srow > VSYNC_LAST + 1u) {
     b = -BURST_AMP * carrierB(np, delta).x;
   } else if (si >= ACTIVE_START && si < ACTIVE_START + ACTIVE_W && srow >= ACTIVE_TOP && srow < ACTIVE_TOP + ACTIVE_H) {
-    let m = i32((P.encChromaTaps - 1u) / 2u);
+    let m = i32((ENC_CHROMA_TAPS - 1u) / 2u);
     var uf = 0.0;
     var vf = 0.0;
-    for (var k = 0u; k < P.encChromaTaps; k = k + 1u) {
+    for (var k = 0u; k < ENC_CHROMA_TAPS; k = k + 1u) {
       let idx = clampIdx(i32(np) + i32(k) - m);
       let h = filters[SEC_ENC_CHROMA * FILTER_STRIDE + k];
       uf = uf + h * yuvB[idx].y;

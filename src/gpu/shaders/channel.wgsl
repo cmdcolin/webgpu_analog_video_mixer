@@ -19,32 +19,49 @@ fn cosUp(row: u32, s: f32) -> f32 {
   return cos(lp.y + lp.z + 2.0 * PI * fract(DOWN_PER_SAMPLE * s));
 }
 
+var<workgroup> tileLc: array<f32, TILE>; // luma-path source: comp - chroma
+var<workgroup> tileUn: array<f32, TILE>; // color-under signal
+
 @compute @workgroup_size(64, 1, 1)
-fn main(@builtin(global_invocation_id) gid: vec3u) {
+fn main(
+  @builtin(global_invocation_id) gid: vec3u,
+  @builtin(local_invocation_id) lid: vec3u,
+  @builtin(workgroup_id) wid: vec3u,
+) {
+  let row = wid.y;
+  let base = i32(row * SPL + wid.x * 64u) - i32(HALO);
+  for (var i = lid.x; i < TILE; i = i + 64u) {
+    let ci = clampIdx(base + i32(i));
+    tileLc[i] = comp[ci] - chroma[ci];
+  }
+  if (P.colorUnderMix > 0.0) {
+    for (var i = lid.x; i < TILE; i = i + 64u) {
+      tileUn[i] = under[clampIdx(base + i32(i))];
+    }
+  }
+  workgroupBarrier();
+
   let s = gid.x;
-  let row = gid.y;
-  if (s >= SPL || row >= NLINES) {
+  if (s >= SPL) {
     return;
   }
   let n = row * SPL + s;
 
   // luma through the channel FIR
-  let ml = i32((P.lumaTaps - 1u) / 2u);
+  let ml = (LUMA_TAPS - 1u) / 2u;
   var luma = 0.0;
-  for (var k = 0u; k < P.lumaTaps; k = k + 1u) {
-    let idx = clampIdx(i32(n) + i32(k) - ml);
-    luma = luma + filters[SEC_LUMA * FILTER_STRIDE + k] * (comp[idx] - chroma[idx]);
+  for (var k = 0u; k < LUMA_TAPS; k = k + 1u) {
+    luma = luma + filters[SEC_LUMA * FILTER_STRIDE + k] * tileLc[lid.x + HALO + k - ml];
   }
 
   // chroma: crossfade direct <-> color-under playback (up-convert + bandpass)
   var chr = chroma[n];
   if (P.colorUnderMix > 0.0) {
-    let mb = i32((P.chromaBpTaps - 1u) / 2u);
+    let mb = (CHROMA_BP_TAPS - 1u) / 2u;
     var up = 0.0;
-    for (var k = 0u; k < P.chromaBpTaps; k = k + 1u) {
-      let si = i32(s) + i32(k) - mb;
-      let idx = clampIdx(i32(n) + i32(k) - mb);
-      up = up + filters[SEC_CHROMA_BP * FILTER_STRIDE + k] * under[idx] * 2.0 * cosUp(row, f32(si));
+    for (var k = 0u; k < CHROMA_BP_TAPS; k = k + 1u) {
+      let si = i32(s) + i32(k) - i32(mb);
+      up = up + filters[SEC_CHROMA_BP * FILTER_STRIDE + k] * tileUn[lid.x + HALO + k - mb] * 2.0 * cosUp(row, f32(si));
     }
     chr = mix(chr, up, P.colorUnderMix);
   }
