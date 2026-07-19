@@ -32,6 +32,7 @@ export const PARAM_DEFS: readonly (readonly [string, ParamType])[] = [
   ['canvasW', 'f32'],
   ['canvasH', 'f32'],
   ['srcAspect', 'f32'],
+  ['srcNoise', 'f32'], // GPU-generated source A: 0 texture, 1 TV static, 2 VHS blank-tape static
   ['invert', 'f32'], // source A polarity flip: negate composite (0.5 = solarized)
   // dirty mixer: source B is a second, non-genlocked composite signal
   ['bGain', 'f32'], // additive mix gain

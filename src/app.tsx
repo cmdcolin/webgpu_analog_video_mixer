@@ -130,7 +130,7 @@ function Slider(props: {
   )
 }
 
-const SOURCE_MODES = ['bars', 'sweep', 'file', 'webcam'] as const
+const SOURCE_MODES = ['bars', 'sweep', 'tv static', 'vhs static', 'file', 'webcam'] as const
 const SOURCE_B_MODES = ['none', 'bars', 'sweep', 'file'] as const
 type SourceMode = (typeof SOURCE_MODES)[number]
 type SourceBMode = (typeof SOURCE_B_MODES)[number]
@@ -139,6 +139,8 @@ const SOURCE_DESC: Record<SourceMode | SourceBMode, string> = {
   none: 'Off — no second source',
   bars: 'Color bars — SMPTE test pattern',
   sweep: 'Sweep — frequency zone plate',
+  'tv static': 'TV static — no-signal broadcast snow',
+  'vhs static': 'VHS static — blank-tape noise',
   file: 'File… — open an image or video',
   webcam: 'Webcam — live camera',
 }
@@ -263,6 +265,14 @@ export function App() {
             if (q.get('src') === 'sweep') {
               engine.setImageSource(sweep())
               setSourceMode('sweep')
+            }
+            if (q.get('src') === 'tv static') {
+              engine.setNoiseSource(1)
+              setSourceMode('tv static')
+            }
+            if (q.get('src') === 'vhs static') {
+              engine.setNoiseSource(2)
+              setSourceMode('vhs static')
             }
             if (q.get('src') === 'webcam') selectSource('webcam')
             // Source B (off by default, so only an enabled mode is serialized)
@@ -420,7 +430,7 @@ export function App() {
       .filter((k) => controls[k] !== DEFAULT_CONTROLS[k])
       .map((k) => `${k}:${+controls[k].toFixed(4)}`)
     const q = [...(set.length ? [`set=${set.join(',')}`] : [])]
-    if (sourceMode === 'sweep' || sourceMode === 'webcam') q.push(`src=${sourceMode}`)
+    if (sourceMode !== 'bars' && sourceMode !== 'file') q.push(`src=${sourceMode}`)
     if (sourceBMode === 'bars' || sourceBMode === 'sweep') q.push(`srcb=${sourceBMode}`)
     const url = `${location.origin}${location.pathname}${q.length ? `?${q.join('&')}` : ''}`
     navigator.clipboard
@@ -471,6 +481,8 @@ export function App() {
         setSourceMode(mode)
         if (mode === 'bars') engine.setImageSource(smpteBars())
         else if (mode === 'sweep') engine.setImageSource(sweep())
+        else if (mode === 'tv static') engine.setNoiseSource(1)
+        else if (mode === 'vhs static') engine.setNoiseSource(2)
         else {
           navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } }).then(
             (stream) => {

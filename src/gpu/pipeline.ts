@@ -187,6 +187,8 @@ export class Engine {
   private videoElB: HTMLVideoElement | null = null
   private stageB: OffscreenCanvas | null = null
   private bEnabled = true
+  // 0 = use srcTex; 1 = TV static; 2 = VHS static. Generated in compose.wgsl.
+  private noiseSource = 0
   private inputTex: GPUTexture
   private outTex: GPUTexture
   private linearSamp: GPUSampler
@@ -500,6 +502,7 @@ export class Engine {
 
   // Patterns are drawn on the signal raster (non-square pixels): aspect is 4:3.
   setImageSource(source: OffscreenCanvas | ImageBitmap, aspect = 4 / 3): void {
+    this.noiseSource = 0
     this.videoEl = null
     this.ensureSrcTex(source.width, source.height, aspect)
     this.gpu.device.queue.copyExternalImageToTexture({ source, flipY: false }, { texture: this.srcTex }, [
@@ -509,7 +512,15 @@ export class Engine {
   }
 
   setVideoSource(el: HTMLVideoElement | null): void {
+    if (el !== null) this.noiseSource = 0
     this.videoEl = el
+  }
+
+  // Switch source A to a GPU-generated noise field (1 TV static, 2 VHS static);
+  // 0 restores the texture path. Any real image/video source clears this.
+  setNoiseSource(kind: number): void {
+    this.noiseSource = kind
+    this.videoEl = null
   }
 
   setImageSourceB(source: OffscreenCanvas | ImageBitmap): void {
@@ -631,6 +642,7 @@ export class Engine {
       canvasW: this.canvas.width,
       canvasH: this.canvas.height,
       srcAspect: this.srcAspect,
+      srcNoise: this.noiseSource,
       invert: c.invert,
       chromaGain: c.chromaGain,
       burstLock: c.burstLock,
