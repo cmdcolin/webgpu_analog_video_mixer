@@ -84,11 +84,6 @@
   cursor: default;
   color: #9a9ab0;
 }
-.flagged,
-.flagged:hover {
-  color: #7fd0a0;
-  border-color: #7fd0a0;
-}
 .caret {
   color: #8a8aa8;
   font-size: 13px;
@@ -176,18 +171,10 @@
   display: block;
   margin: 6px 0;
 }
-.sliderHi {
-  margin-left: -8px;
-  border-left: 2px solid #7fd0a0;
-  padding-left: 6px;
-}
 .sliderTop {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-}
-.labelHi {
-  color: #7fd0a0;
 }
 .value {
   color: #7fd0a0;

@@ -5,7 +5,7 @@ import { smpteBars, sweep } from './sources/pattern'
 import { GROUPS, type Group } from './ui/controls'
 import { SYNCABLE_KEYS, SYNC_DIVISIONS, createMidi, syncedValue } from './ui/midi'
 import type { BindingMap, MidiManager, MidiStatus } from './ui/midi'
-import { changedKeys, loadSlots, matchPreset, PRESETS, presetControls, saveSlot } from './ui/presets'
+import { matchPreset, PRESETS, presetControls } from './ui/presets'
 import styles from './app.module.css'
 
 const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ')
@@ -42,15 +42,12 @@ function GearIcon() {
   )
 }
 
-function Section(props: { title: string; children: React.ReactNode; flagged?: boolean; defaultOpen?: boolean }) {
+function Section(props: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(props.defaultOpen ?? true)
   return (
     <div>
-      <h3 className={cx(styles.head, props.flagged && styles.flagged)} onClick={() => setOpen((o) => !o)}>
-        <span>
-          {props.flagged ? '● ' : ''}
-          {props.title}
-        </span>
+      <h3 className={styles.head} onClick={() => setOpen((o) => !o)}>
+        <span>{props.title}</span>
         <span className={styles.caret}>{open ? '▾' : '▸'}</span>
       </h3>
       {open ? props.children : null}
@@ -69,15 +66,14 @@ function Slider(props: {
   onChange: (v: number) => void
   midi?: { label: string | null; armed: boolean; onArm: () => void }
   sync?: { label: string | null; live: boolean; onCycle: () => void }
-  highlight?: boolean
 }) {
   const midi = props.midi
   const sync = props.sync
   const locked = sync?.label !== null && sync?.label !== undefined && sync.live
   return (
-    <label className={cx(styles.slider, props.highlight && styles.sliderHi)}>
+    <label className={styles.slider}>
       <span className={styles.sliderTop}>
-        <span className={props.highlight ? styles.labelHi : undefined}>{props.label}</span>
+        <span>{props.label}</span>
         <span className={styles.value}>
           {props.value.toFixed(props.step < 0.01 ? 3 : props.step < 1 ? 2 : 0)}
           {props.unit}
@@ -186,7 +182,6 @@ export function App() {
   const [armedKey, setArmedKey] = useState<ControlKey | null>(null)
   const [bpm, setBpm] = useState<number | null>(null)
   const [syncMap, setSyncMap] = useState<SyncMap>(loadSync)
-  const [hoverPreset, setHoverPreset] = useState<string | null>(null)
   const [lastPreset, setLastPreset] = useState<string | null>(null)
   const [comparing, setComparing] = useState(false)
 
@@ -328,7 +323,6 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const engine = engineRef.current
       const typing = e.target instanceof HTMLInputElement
       if (e.key === 'Escape') {
         setShowAdvanced(false)
@@ -338,16 +332,6 @@ export function App() {
         toggleFullscreen()
       } else if (!typing && e.key === 'c' && !e.repeat) {
         startCompare()
-      } else if (!typing && engine && e.key >= '1' && e.key <= '8') {
-        const slot = Number(e.key)
-        if (e.shiftKey) {
-          saveSlot(slot, engine.controls)
-        } else {
-          const stored = loadSlots()[String(slot)]
-          // loadSlots()'s type is optimistic; a slot may be empty at runtime.
-          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-          if (stored) applyControls({ ...DEFAULT_CONTROLS, ...stored })
-        }
       }
     }
     const onKeyUp = (e: KeyboardEvent) => {
@@ -556,30 +540,20 @@ export function App() {
   }
 
   const active = matchPreset(controls)
-  const hoverDef = hoverPreset === null ? undefined : PRESETS.find((p) => p.name === hoverPreset)
-  const hoverKeys = hoverDef === undefined ? null : changedKeys(hoverDef.patch, controls)
   const presetGroups = PRESETS.reduce<{ name: string; defs: typeof PRESETS }[]>((acc, p) => {
     const g = acc.find((x) => x.name === p.group)
     if (g === undefined) acc.push({ name: p.group, defs: [p] })
     else g.defs.push(p)
     return acc
   }, [])
-  const changedCount = hoverKeys === null ? 0 : hoverKeys.size
-  const presetCaption = hoverDef
-    ? `${hoverDef.blurb} · changes ${changedCount} knob${changedCount === 1 ? '' : 's'}`
-    : active
-      ? active.blurb
-      : lastPreset === null
-        ? 'hover a preset to preview what it changes; click to apply.'
-        : `modified from "${lastPreset}"`
+  const presetCaption = active
+    ? active.blurb
+    : lastPreset === null
+      ? 'click a preset for an instant look, then tweak the sliders below.'
+      : `modified from "${lastPreset}"`
 
   const renderGroup = (group: Group, defaultOpen: boolean) => (
-    <Section
-      key={group.name}
-      title={group.name}
-      defaultOpen={defaultOpen}
-      flagged={hoverKeys !== null && group.sliders.some((s) => hoverKeys.has(s.key))}
-    >
+    <Section key={group.name} title={group.name} defaultOpen={defaultOpen}>
       {group.sliders.map((s) => (
         <Slider
           key={s.key}
@@ -591,7 +565,6 @@ export function App() {
           value={displayValue(s.key)}
           defaultValue={DEFAULT_CONTROLS[s.key]}
           onChange={(v) => setControl(s.key, v)}
-          highlight={hoverKeys?.has(s.key) ?? false}
           midi={midiStatus === 'ready' ? { label: bindLabel(s.key), armed: armedKey === s.key, onArm: () => armMidi(s.key) } : undefined}
           sync={midiStatus === 'ready' && SYNCABLE_SET.has(s.key) ? { label: syncLabel(s.key), live: bpm !== null, onCycle: () => cycleSync(s.key) } : undefined}
         />
@@ -734,8 +707,6 @@ export function App() {
                       title={p.blurb}
                       className={cx(styles.btn, isActive && styles.active, isEdited && styles.edited)}
                       onClick={() => applyPreset(p.name, p.patch)}
-                      onMouseEnter={() => setHoverPreset(p.name)}
-                      onMouseLeave={() => setHoverPreset((h) => (h === p.name ? null : h))}
                     >
                       {p.name}
                       {isEdited ? ' •' : ''}
@@ -754,19 +725,10 @@ export function App() {
             >
               {comparing ? 'showing clean…' : 'hold to compare'}
             </button>
-            <button
-              className={cx(styles.btn, styles.danger)}
-              onClick={() => {
-                applyControls({ ...DEFAULT_CONTROLS })
-                setLastPreset(null)
-              }}
-            >
-              reset all
-            </button>
             <button className={cx(styles.btn, copied && styles.active)} onClick={copyLink}>
               {copied ? 'copied!' : 'copy link'}
             </button>
-            <div className={styles.hint}>hover a preset to see its effect · keys 1-8 slots · f fullscreen</div>
+            <div className={styles.hint}>“clean” resets everything · hold C to compare · f for fullscreen</div>
           </Section>
 
           {/* MIDI only appears once enabled (from Advanced) — 99% of users never
@@ -865,13 +827,9 @@ export function App() {
               <li>
                 Click a <b>Preset</b> for an instant look, then tweak the sliders below.
               </li>
-              <li>Hover a preset to preview which knobs it changes.</li>
             </ol>
             <div className={styles.helpHead}>Keyboard</div>
             <ul className={styles.helpList}>
-              <li>
-                <b>1–8</b> recall a slot · <b>Shift+1–8</b> save the current look to a slot
-              </li>
               <li>
                 <b>C</b> (hold) compare against the clean signal
               </li>
