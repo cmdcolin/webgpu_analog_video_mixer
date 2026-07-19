@@ -2,7 +2,7 @@
 
 *(phosphene — the light you see without light; here, glitch that emerges from the physics, not from a filter.)*
 
-Live demo - https://cmdcolin.github.io/webgpu_analog_video_mixer/
+Live demo - https://cmdcolin.github.io/phosphene/
 
 Needs a WebGPU-enabled browser
 
