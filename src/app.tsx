@@ -168,7 +168,7 @@ export function App() {
     engine === null ? getDefaultControls : engine.getControls,
   )
   const [sourceMode, setSourceMode] = useState<SourceMode>('bars')
-  const [sourceBMode, setSourceBMode] = useState<SourceBMode>('bars')
+  const [sourceBMode, setSourceBMode] = useState<SourceBMode>('none')
   const [fullscreen, setFullscreen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
@@ -248,7 +248,7 @@ export function App() {
             engine.onDeviceLost = (m) =>
               setFatal({ title: 'WebGPU device lost', body: m === '' ? 'The GPU device was lost.' : m, kind: 'lost' })
             engine.setImageSource(smpteBars())
-            engine.setImageSourceB(smpteBars())
+            engine.setSourceBEnabled(false) // B is off by default; opt in via the B dropdown
             const q = new URLSearchParams(location.search)
             const preset = q.get('set')
             if (preset !== null) {
@@ -265,13 +265,15 @@ export function App() {
               setSourceMode('sweep')
             }
             if (q.get('src') === 'webcam') selectSource('webcam')
-            // Source B (bars is the default, so only 'none'/'sweep' are serialized)
+            // Source B (off by default, so only an enabled mode is serialized)
             const srcb = q.get('srcb')
-            if (srcb === 'none') {
-              engine.setSourceBEnabled(false)
-              setSourceBMode('none')
+            if (srcb === 'bars') {
+              engine.setImageSourceB(smpteBars())
+              engine.setSourceBEnabled(true)
+              setSourceBMode('bars')
             } else if (srcb === 'sweep') {
               engine.setImageSourceB(sweep())
+              engine.setSourceBEnabled(true)
               setSourceBMode('sweep')
             }
             const vurl = q.get('vurl')
@@ -338,12 +340,19 @@ export function App() {
       if (e.key === 'c') endCompare()
     }
     const onFs = () => setFullscreen(document.fullscreenElement !== null)
+    // Restored from bfcache: the GPUDevice captured before navigating away is
+    // dead, so the canvas would render frozen. Reload to build a fresh engine.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) location.reload()
+    }
     window.addEventListener('keydown', onKey)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('pageshow', onPageShow)
     document.addEventListener('fullscreenchange', onFs)
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('pageshow', onPageShow)
       document.removeEventListener('fullscreenchange', onFs)
     }
   }, [])
@@ -412,7 +421,7 @@ export function App() {
       .map((k) => `${k}:${+controls[k].toFixed(4)}`)
     const q = [...(set.length ? [`set=${set.join(',')}`] : [])]
     if (sourceMode === 'sweep' || sourceMode === 'webcam') q.push(`src=${sourceMode}`)
-    if (sourceBMode === 'none' || sourceBMode === 'sweep') q.push(`srcb=${sourceBMode}`)
+    if (sourceBMode === 'bars' || sourceBMode === 'sweep') q.push(`srcb=${sourceBMode}`)
     const url = `${location.origin}${location.pathname}${q.length ? `?${q.join('&')}` : ''}`
     navigator.clipboard
       .writeText(url)
@@ -850,4 +859,16 @@ export function App() {
       ) : null}
     </div>
   )
+}
+
+// The engine is a singleton owning a GPUDevice + rAF loop. Fast Refresh won't
+// reliably run the mount effect's cleanup on a hot swap (an empty-dep effect
+// isn't re-run), so old devices leak and stack up until Firefox Nightly's
+// WebGPU hangs the tab. Destroy the engine deterministically before Vite
+// replaces this module; the fresh module then builds a new one on remount.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    window.vf?.destroy()
+    window.vf = undefined
+  })
 }
