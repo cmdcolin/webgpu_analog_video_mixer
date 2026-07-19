@@ -6,11 +6,11 @@ import { GROUPS } from './ui/controls'
 import { SYNCABLE_KEYS, SYNC_DIVISIONS, createMidi, syncedValue } from './ui/midi'
 import type { BindingMap, MidiManager, MidiStatus } from './ui/midi'
 import { changedKeys, loadSlots, matchPreset, PRESETS, presetControls, saveSlot } from './ui/presets'
+import styles from './app.module.css'
+
+const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ')
 
 const LABEL_BY_KEY = new Map(GROUPS.flatMap((g) => g.sliders).map((s) => [s.key, s.label]))
-// Deep signal-path groups: real but rarely-touched knobs. Start collapsed so the
-// panel opens calm; presets set most of these anyway.
-const DEEP_GROUPS = new Set(['Tape / Channel', 'VHS Chroma', 'Timebase', 'Sync', 'Decoder', 'Display'])
 const SYNCABLE_SET = new Set<ControlKey>(SYNCABLE_KEYS)
 
 // Which rate controls are clock-locked, and to which SYNC_DIVISIONS index.
@@ -26,142 +26,6 @@ function omitKey(map: SyncMap, key: ControlKey): SyncMap {
   return out
 }
 
-// UI font for labels/headers/prose; mono reserved for numeric readouts where
-// digit alignment (and the technical vibe) is actually earned.
-const FONT_UI = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-const FONT_MONO = "ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace"
-
-const panelStyle: React.CSSProperties = {
-  width: 300,
-  overflowY: 'auto',
-  padding: '10px 14px',
-  background: '#16161a',
-  color: '#c8c8d0',
-  fontFamily: FONT_UI,
-  fontSize: 12,
-  flexShrink: 0,
-}
-
-const btnStyle: React.CSSProperties = {
-  background: '#26262e',
-  color: '#c8c8d0',
-  border: '1px solid #3a3a44',
-  borderRadius: 3,
-  padding: '3px 8px',
-  margin: '2px 3px 2px 0',
-  fontFamily: FONT_UI,
-  fontSize: 12,
-  cursor: 'pointer',
-}
-
-// The Input block is deliberately styled unlike the effect sections: a calm
-// card with rows, not a collapsible header bar — "what am I feeding in" reads
-// differently from "how is it degraded".
-const inputCardStyle: React.CSSProperties = {
-  background: '#1b1b22',
-  border: '1px solid #2c2c38',
-  borderRadius: 6,
-  padding: '8px 10px 10px',
-  margin: '4px 0 6px',
-}
-
-const inputHeadStyle: React.CSSProperties = {
-  fontSize: 11,
-  color: '#7f9fd0',
-  fontWeight: 600,
-  letterSpacing: '0.04em',
-  margin: '0 0 6px',
-}
-
-const inputRowStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 4,
-  margin: '3px 0',
-}
-
-const inputTagStyle: React.CSSProperties = {
-  width: 14,
-  color: '#6a6a80',
-  fontFamily: FONT_MONO,
-  fontSize: 11,
-  fontWeight: 700,
-  flexShrink: 0,
-}
-
-const chipStyle: React.CSSProperties = {
-  flex: 1,
-  background: '#26262e',
-  color: '#c8c8d0',
-  border: '1px solid #3a3a44',
-  borderRadius: 3,
-  padding: '3px 0',
-  fontFamily: FONT_UI,
-  fontSize: 11,
-  cursor: 'pointer',
-}
-
-const chipActiveStyle: React.CSSProperties = {
-  borderColor: '#7fd0a0',
-  color: '#7fd0a0',
-  background: '#20302a',
-}
-
-const overlayBarStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: 12,
-  right: 12,
-  display: 'flex',
-  gap: 6,
-}
-
-const overlayBtnStyle: React.CSSProperties = {
-  background: 'rgba(22,22,26,0.6)',
-  color: '#c8c8d0',
-  border: '1px solid #3a3a44',
-  borderRadius: 3,
-  padding: '4px 9px',
-  fontFamily: FONT_UI,
-  fontSize: 12,
-  cursor: 'pointer',
-}
-
-const dialogBackdropStyle: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.6)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 10,
-}
-
-const dialogCardStyle: React.CSSProperties = {
-  width: 340,
-  maxWidth: '90vw',
-  background: '#16161a',
-  border: '1px solid #3a3a44',
-  borderRadius: 8,
-  padding: '18px 20px',
-  color: '#c8c8d0',
-  fontFamily: 'monospace',
-  fontSize: 11,
-}
-
-const sectionHeadStyle: React.CSSProperties = {
-  fontSize: 12,
-  margin: '14px 0 4px',
-  padding: '3px 2px',
-  color: '#9a9ab0',
-  borderBottom: '1px solid #2a2a34',
-  fontWeight: 600,
-  cursor: 'pointer',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  userSelect: 'none',
-}
-
 function GearIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -172,42 +36,18 @@ function GearIcon() {
 
 function Section(props: { title: string; children: React.ReactNode; flagged?: boolean; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(props.defaultOpen ?? true)
-  const head = props.flagged ? { ...sectionHeadStyle, borderColor: '#7fd0a0', color: '#7fd0a0' } : sectionHeadStyle
   return (
     <div>
-      <h3 style={head} onClick={() => setOpen((o) => !o)}>
+      <h3 className={cx(styles.head, props.flagged && styles.flagged)} onClick={() => setOpen((o) => !o)}>
         <span>
           {props.flagged ? '● ' : ''}
           {props.title}
         </span>
-        <span style={{ color: '#8a8aa8', fontSize: 13 }}>{open ? '▾' : '▸'}</span>
+        <span className={styles.caret}>{open ? '▾' : '▸'}</span>
       </h3>
       {open ? props.children : null}
     </div>
   )
-}
-
-const fatalWrapStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '100vw',
-  height: '100vh',
-  background: '#0a0a0c',
-  padding: 20,
-  boxSizing: 'border-box',
-}
-
-const fatalCardStyle: React.CSSProperties = {
-  maxWidth: 560,
-  background: '#16161a',
-  border: '1px solid #3a3a44',
-  borderRadius: 8,
-  padding: '24px 28px',
-  color: '#c8c8d0',
-  fontFamily: 'monospace',
-  fontSize: 13,
-  lineHeight: 1.6,
 }
 
 function Slider(props: {
@@ -226,27 +66,20 @@ function Slider(props: {
   const midi = props.midi
   const sync = props.sync
   const locked = sync?.label !== null && sync?.label !== undefined && sync.live
-  const labelStyle: React.CSSProperties = props.highlight
-    ? { display: 'block', margin: '6px 0 6px -8px', borderLeft: '2px solid #7fd0a0', paddingLeft: 6 }
-    : { display: 'block', margin: '6px 0' }
   return (
-    <label style={labelStyle}>
-      <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={props.highlight ? { color: '#7fd0a0' } : undefined}>{props.label}</span>
-        <span style={{ color: '#7fd0a0', fontFamily: FONT_MONO }}>
+    <label className={cx(styles.slider, props.highlight && styles.sliderHi)}>
+      <span className={styles.sliderTop}>
+        <span className={props.highlight ? styles.labelHi : undefined}>{props.label}</span>
+        <span className={styles.value}>
           {props.value.toFixed(props.step < 0.01 ? 3 : props.step < 1 ? 2 : 0)}
           {props.unit}
           {sync ? (
             <button
               title={sync.label === null ? 'lock to MIDI clock' : `clock-synced (${sync.label}) — click to change`}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: sync.label === null ? '#4a4a58' : sync.live ? '#e0b040' : '#8a7a40',
-                cursor: 'pointer',
-                fontSize: 10,
-                padding: '0 0 0 6px',
-              }}
+              className={cx(
+                styles.icon,
+                sync.label !== null && (sync.live ? styles.iconOn : styles.iconSyncSet),
+              )}
               onClick={(e) => {
                 e.preventDefault()
                 sync.onCycle()
@@ -258,14 +91,7 @@ function Slider(props: {
           {midi ? (
             <button
               title={midi.label === null ? 'assign a MIDI control' : `MIDI CC${midi.label} — click to relearn`}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: midi.armed ? '#e0b040' : midi.label === null ? '#4a4a58' : '#7f9fd0',
-                cursor: 'pointer',
-                fontSize: 10,
-                padding: '0 0 0 6px',
-              }}
+              className={cx(styles.icon, midi.armed ? styles.iconOn : midi.label !== null && styles.iconMidiSet)}
               onClick={(e) => {
                 e.preventDefault()
                 midi.onArm()
@@ -276,14 +102,7 @@ function Slider(props: {
           ) : null}
           <button
             title="reset"
-            style={{
-              background: 'none',
-              border: 'none',
-              color: props.value === props.defaultValue ? '#3a3a44' : '#8888a0',
-              cursor: 'pointer',
-              fontSize: 11,
-              padding: '0 0 0 5px',
-            }}
+            className={cx(styles.reset, props.value === props.defaultValue && styles.resetDef)}
             onClick={(e) => {
               e.preventDefault()
               props.onChange(props.defaultValue)
@@ -295,7 +114,7 @@ function Slider(props: {
       </span>
       <input
         type="range"
-        style={{ width: '100%', opacity: locked ? 0.45 : 1 }}
+        className={styles.range}
         min={props.min}
         max={props.max}
         step={props.step}
@@ -307,8 +126,18 @@ function Slider(props: {
   )
 }
 
-type SourceMode = 'bars' | 'sweep' | 'file' | 'webcam'
-type SourceBMode = 'none' | 'bars' | 'sweep' | 'file'
+const SOURCE_MODES = ['bars', 'sweep', 'file', 'webcam'] as const
+const SOURCE_B_MODES = ['none', 'bars', 'sweep', 'file'] as const
+type SourceMode = (typeof SOURCE_MODES)[number]
+type SourceBMode = (typeof SOURCE_B_MODES)[number]
+// Full labels shown inside the dropdowns so each option explains what it is.
+const SOURCE_DESC: Record<SourceMode | SourceBMode, string> = {
+  none: 'Off — no second source',
+  bars: 'Color bars — SMPTE test pattern',
+  sweep: 'Sweep — frequency zone plate',
+  file: 'File… — open an image or video',
+  webcam: 'Webcam — live camera',
+}
 interface Fatal { title: string; body: string; kind: 'unavailable' | 'lost' }
 
 declare global {
@@ -332,6 +161,7 @@ export function App() {
   const [sourceBMode, setSourceBMode] = useState<SourceBMode>('bars')
   const [fullscreen, setFullscreen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [copied, setCopied] = useState(false)
   const [renderScale, setRenderScale] = useState(1)
   const renderScaleRef = useRef(1)
@@ -502,6 +332,7 @@ export function App() {
       const typing = e.target instanceof HTMLInputElement
       if (e.key === 'Escape') {
         setShowAdvanced(false)
+        setShowHelp(false)
         midiRef.current?.arm(null)
       } else if (!typing && e.key === 'f') {
         toggleFullscreen()
@@ -744,104 +575,99 @@ export function App() {
         : `modified from "${lastPreset}"`
 
   return fatal !== null ? (
-    <div style={fatalWrapStyle}>
-      <div style={fatalCardStyle}>
-        <h1 style={{ fontSize: 18, margin: '0 0 12px', color: '#f66' }}>{fatal.title}</h1>
+    <div className={styles.fatalWrap}>
+      <div className={styles.fatalCard}>
+        <h1 className={styles.fatalTitle}>{fatal.title}</h1>
         <p style={{ margin: '0 0 14px' }}>{fatal.body}</p>
         {fatal.kind === 'unavailable' ? (
           <>
-            <p style={{ margin: '0 0 14px', color: '#8888a0' }}>
+            <p className={styles.muted} style={{ margin: '0 0 14px' }}>
               This app renders the entire NTSC signal path in WebGPU compute shaders, so a WebGPU-capable browser with
               working hardware acceleration is required — there is no 2D-canvas fallback.
             </p>
-            <p style={{ margin: 0, color: '#8888a0' }}>
+            <p className={styles.muted} style={{ margin: 0 }}>
               Check support at{' '}
-              <a href="https://caniuse.com/webgpu" style={{ color: '#7fd0a0' }} target="_blank" rel="noreferrer">
+              <a className={styles.link} href="https://caniuse.com/webgpu" target="_blank" rel="noreferrer">
                 caniuse.com/webgpu
               </a>
               .
             </p>
           </>
         ) : (
-          <button style={{ ...btnStyle, borderColor: '#7fd0a0' }} onClick={() => location.reload()}>
+          <button className={cx(styles.btn, styles.active)} onClick={() => location.reload()}>
             reload
           </button>
         )}
       </div>
     </div>
   ) : (
-    <div style={{ display: 'flex', width: '100vw', height: '100vh', background: '#000' }}>
-      <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
-        {error !== '' && (
-          <div style={{ position: 'absolute', top: 20, left: 20, color: '#f66', fontFamily: 'monospace' }}>
-            {error}
-          </div>
-        )}
-        <div style={overlayBarStyle}>
-          <button
-            style={{ ...overlayBtnStyle, display: 'flex', alignItems: 'center' }}
-            onClick={() => setShowAdvanced(true)}
-            title="advanced settings"
-          >
+    <div className={styles.app}>
+      <div className={styles.stage}>
+        <canvas ref={canvasRef} className={styles.canvas} />
+        {error !== '' && <div className={styles.error}>{error}</div>}
+        <div className={styles.overlayBar}>
+          <button className={styles.overlayBtn} style={{ fontWeight: 700 }} onClick={() => setShowHelp(true)} title="help / about">
+            ?
+          </button>
+          <button className={styles.overlayBtn} onClick={() => setShowAdvanced(true)} title="advanced settings">
             <GearIcon />
           </button>
-          <button style={overlayBtnStyle} onClick={toggleFullscreen} title="toggle fullscreen (f)">
+          <button className={styles.overlayBtn} onClick={toggleFullscreen} title="toggle fullscreen (f)">
             {fullscreen ? '⤢ exit' : '⛶ fullscreen'}
           </button>
         </div>
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 8,
-            left: 12,
-            color: '#4a4',
-            fontFamily: 'monospace',
-            fontSize: 11,
-          }}
-        >
+        <div className={styles.stats}>
           {fps.toFixed(0)} fps · {res}
         </div>
       </div>
       {fullscreen ? null : (
-        <div style={panelStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', margin: '4px 0 10px' }}>
-            <h2 style={{ fontSize: 13, margin: 0 }}>Phosphene — NTSC signal path</h2>
-            <a
-              href="https://github.com/cmdcolin/phosphene"
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: '#7fd0a0', fontSize: 11 }}
-            >
+        <div className={styles.panel}>
+          <div className={styles.titleRow}>
+            <h2 className={styles.title}>Phosphene — NTSC signal path</h2>
+            <a className={styles.link} href="https://github.com/cmdcolin/phosphene" target="_blank" rel="noreferrer">
               GitHub ↗
             </a>
           </div>
 
-          <div style={inputCardStyle}>
-            <div style={inputHeadStyle}>Input</div>
-            <div style={inputRowStyle}>
-              <span style={inputTagStyle}>A</span>
-              {(['bars', 'sweep', 'file', 'webcam'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  style={{ ...chipStyle, ...(sourceMode === mode ? chipActiveStyle : null) }}
-                  onClick={() => selectSource(mode)}
-                >
-                  {mode}
-                </button>
-              ))}
+          <div>
+            <div className={cx(styles.head, styles.static)}>Input</div>
+            <div className={styles.inputRow}>
+              <span className={styles.tag} title="main source">
+                A
+              </span>
+              <select
+                className={styles.select}
+                value={sourceMode}
+                onChange={(e) => {
+                  const m = SOURCE_MODES.find((x) => x === e.target.value)
+                  if (m !== undefined) selectSource(m)
+                }}
+              >
+                {SOURCE_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {SOURCE_DESC[mode]}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div style={inputRowStyle}>
-              <span style={inputTagStyle} title="dirty mix source">B</span>
-              {(['none', 'bars', 'sweep', 'file'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  style={{ ...chipStyle, ...(sourceBMode === mode ? chipActiveStyle : null) }}
-                  onClick={() => selectSourceB(mode)}
-                >
-                  {mode === 'none' ? 'off' : mode}
-                </button>
-              ))}
+            <div className={styles.inputRow}>
+              <span className={styles.tag} title="second source, mixed in dirty">
+                B
+              </span>
+              <select
+                className={styles.select}
+                value={sourceBMode}
+                onChange={(e) => {
+                  const m = SOURCE_B_MODES.find((x) => x === e.target.value)
+                  if (m !== undefined) selectSourceB(m)
+                }}
+              >
+                {SOURCE_B_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {SOURCE_DESC[mode]}
+                  </option>
+                ))}
+              </select>
             </div>
             <input
               ref={fileInputRef}
@@ -868,17 +694,7 @@ export function App() {
           <Section title="Presets">
             {presetGroups.map((grp) => (
               <div key={grp.name} style={{ margin: '2px 0 4px' }}>
-                <div
-                  style={{
-                    color: '#7a7a90',
-                    fontSize: 10,
-                    letterSpacing: '0.05em',
-                    textTransform: 'uppercase',
-                    margin: '4px 0 2px',
-                  }}
-                >
-                  {grp.name}
-                </div>
+                <div className={styles.grpLabel}>{grp.name}</div>
                 {grp.defs.map((p) => {
                   const isActive = active?.name === p.name
                   const isEdited = active === undefined && lastPreset === p.name
@@ -886,11 +702,7 @@ export function App() {
                     <button
                       key={p.name}
                       title={p.blurb}
-                      style={{
-                        ...btnStyle,
-                        borderColor: isActive ? '#7fd0a0' : isEdited ? '#7f7f50' : '#3a3a44',
-                        color: isActive ? '#7fd0a0' : '#c8c8d0',
-                      }}
+                      className={cx(styles.btn, isActive && styles.active, isEdited && styles.edited)}
                       onClick={() => applyPreset(p.name, p.patch)}
                       onMouseEnter={() => setHoverPreset(p.name)}
                       onMouseLeave={() => setHoverPreset((h) => (h === p.name ? null : h))}
@@ -902,18 +714,18 @@ export function App() {
                 })}
               </div>
             ))}
-            <div style={{ minHeight: 28, color: '#8a8aa8', margin: '4px 0', lineHeight: 1.4 }}>{presetCaption}</div>
+            <div className={styles.caption}>{presetCaption}</div>
             <button
               onPointerDown={startCompare}
               onPointerUp={endCompare}
               onPointerLeave={endCompare}
-              style={{ ...btnStyle, borderColor: comparing ? '#7fd0a0' : '#3a3a44', color: comparing ? '#7fd0a0' : '#c8c8d0' }}
+              className={cx(styles.btn, comparing && styles.active)}
               title="hold to preview the clean signal, release to return (or hold C)"
             >
               {comparing ? 'showing clean…' : 'hold to compare'}
             </button>
             <button
-              style={{ ...btnStyle, borderColor: '#a05050' }}
+              className={cx(styles.btn, styles.danger)}
               onClick={() => {
                 applyControls({ ...DEFAULT_CONTROLS })
                 setLastPreset(null)
@@ -921,72 +733,53 @@ export function App() {
             >
               reset all
             </button>
-            <button style={{ ...btnStyle, borderColor: copied ? '#7fd0a0' : '#3a3a44' }} onClick={copyLink}>
+            <button className={cx(styles.btn, copied && styles.active)} onClick={copyLink}>
               {copied ? 'copied!' : 'copy link'}
             </button>
-            <div style={{ color: '#666', margin: '4px 0' }}>hover a preset to see its effect · keys 1-8 slots · f fullscreen</div>
+            <div className={styles.hint}>hover a preset to see its effect · keys 1-8 slots · f fullscreen</div>
           </Section>
 
-          <Section title="MIDI">
-            {midiStatus === 'idle' ? (
-              <button style={btnStyle} onClick={() => midiRef.current?.enable()}>
-                enable MIDI
-              </button>
-            ) : null}
-            {midiStatus === 'requesting' ? <div style={{ color: '#8888a0' }}>requesting access…</div> : null}
-            {midiStatus === 'unsupported' ? (
-              <div style={{ color: '#a08050' }}>Web MIDI not supported in this browser.</div>
-            ) : null}
-            {midiStatus === 'denied' ? (
-              <div style={{ color: '#a05050' }}>
-                Access denied.{' '}
-                <button style={{ ...btnStyle, margin: 0 }} onClick={() => midiRef.current?.enable()}>
-                  retry
-                </button>
-              </div>
-            ) : null}
-            {midiStatus === 'ready' ? (
+          {/* MIDI only appears once enabled (from Advanced) — 99% of users never
+              wire up a controller, so it stays out of the default panel. */}
+          {midiStatus === 'ready' ? (
+            <Section title="MIDI">
               <>
-                <div style={{ color: '#666', margin: '4px 0' }}>
+                <div className={styles.hint}>
                   {armedKey === null
                     ? 'click ⚟ on any slider, then move a knob to bind. knobs soft-take-over (no jumps).'
                     : `learning ${LABEL_BY_KEY.get(armedKey) ?? armedKey}… move a knob (Esc to cancel)`}
                 </div>
                 {Object.entries(midiBindings).map(([key, b]) => (
-                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', margin: '2px 0' }}>
+                  <div key={key} className={styles.midiRow}>
                     <span>
-                      {LABEL_BY_KEY.get(key as ControlKey) ?? key}{' '}
-                      <span style={{ color: '#7f9fd0' }}>· CC{b.controller}</span>
-                      {b.channel === 0 ? '' : <span style={{ color: '#666' }}> ch{b.channel + 1}</span>}
+                      {LABEL_BY_KEY.get(key as ControlKey) ?? key} <span className={styles.blue}>· CC{b.controller}</span>
+                      {b.channel === 0 ? '' : <span className={styles.dim}> ch{b.channel + 1}</span>}
                     </span>
-                    <button
-                      style={{ background: 'none', border: 'none', color: '#a05050', cursor: 'pointer', fontSize: 11 }}
-                      onClick={() => midiRef.current?.clearBinding(key as ControlKey)}
-                    >
+                    <button className={styles.iconX} onClick={() => midiRef.current?.clearBinding(key as ControlKey)}>
                       ×
                     </button>
                   </div>
                 ))}
                 {Object.keys(midiBindings).length === 0 ? null : (
-                  <button style={{ ...btnStyle, borderColor: '#a05050' }} onClick={() => midiRef.current?.clearAll()}>
+                  <button className={cx(styles.btn, styles.danger)} onClick={() => midiRef.current?.clearAll()}>
                     clear all bindings
                   </button>
                 )}
-                <div style={{ margin: '8px 0 2px', color: bpm === null ? '#666' : '#e0b040' }}>
+                <div className={bpm === null ? styles.dim : styles.amber} style={{ margin: '8px 0 2px' }}>
                   {bpm === null ? 'clock ♩ — no signal' : `clock ♩ = ${bpm.toFixed(1)} BPM`}
                 </div>
-                <div style={{ color: '#666', margin: '0 0 2px' }}>
+                <div className={styles.dim} style={{ margin: '0 0 2px' }}>
                   click ♩ on a rate slider (sweep, line offset) to lock it to the beat.
                 </div>
               </>
-            ) : null}
-          </Section>
+            </Section>
+          ) : null}
 
           {GROUPS.map((group) => (
             <Section
               key={group.name}
               title={group.name}
-              defaultOpen={!DEEP_GROUPS.has(group.name)}
+              defaultOpen={false}
               flagged={hoverKeys !== null && group.sliders.some((s) => hoverKeys.has(s.key))}
             >
               {group.sliders.map((s) => (
@@ -1018,27 +811,84 @@ export function App() {
         </div>
       )}
       {showAdvanced ? (
-        <div style={dialogBackdropStyle} onClick={() => setShowAdvanced(false)}>
-          <div style={dialogCardStyle} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-              <h2 style={{ fontSize: 13, margin: 0 }}>Advanced</h2>
-              <button style={{ ...btnStyle, margin: 0 }} onClick={() => setShowAdvanced(false)}>
+        <div className={styles.backdrop} onClick={() => setShowAdvanced(false)}>
+          <div className={styles.card} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.cardRow}>
+              <h2 className={styles.h2}>Advanced</h2>
+              <button className={styles.btn} style={{ margin: 0 }} onClick={() => setShowAdvanced(false)}>
                 close
               </button>
             </div>
-            <Slider
-              label="render scale"
-              unit="x"
-              min={0.25}
-              max={2}
-              step={0.05}
-              value={renderScale}
-              defaultValue={1}
-              onChange={setScale}
-            />
-            <div style={{ color: '#666', margin: '2px 0' }}>
+            <Slider label="render scale" unit="x" min={0.25} max={2} step={0.05} value={renderScale} defaultValue={1} onChange={setScale} />
+            <div className={styles.dim} style={{ margin: '2px 0 12px' }}>
               backing-store resolution · lower = faster · {res}
             </div>
+            <div className={styles.subhead}>MIDI control</div>
+            {midiStatus === 'idle' ? (
+              <button className={styles.btn} style={{ margin: 0 }} onClick={() => midiRef.current?.enable()}>
+                enable MIDI
+              </button>
+            ) : null}
+            {midiStatus === 'requesting' ? <div className={styles.muted}>requesting access…</div> : null}
+            {midiStatus === 'unsupported' ? <div className={styles.warn}>Web MIDI not supported in this browser.</div> : null}
+            {midiStatus === 'denied' ? (
+              <div className={styles.err}>
+                Access denied.{' '}
+                <button className={styles.btn} style={{ margin: 0 }} onClick={() => midiRef.current?.enable()}>
+                  retry
+                </button>
+              </div>
+            ) : null}
+            {midiStatus === 'ready' ? <div className={styles.ok}>enabled — bind knobs from the MIDI panel in the sidebar.</div> : null}
+            <div className={styles.dim} style={{ margin: '4px 0 0' }}>
+              map a hardware controller to any slider; sync rates to MIDI clock.
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {showHelp ? (
+        <div className={styles.backdrop} onClick={() => setShowHelp(false)}>
+          <div className={cx(styles.card, styles.cardWide)} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.cardRow} style={{ marginBottom: 10 }}>
+              <h2 style={{ fontSize: 15, margin: 0 }}>Phosphene</h2>
+              <button className={styles.btn} style={{ margin: 0 }} onClick={() => setShowHelp(false)}>
+                close
+              </button>
+            </div>
+            <p className={styles.helpText}>
+              A real-time simulator of the analog NTSC signal path — camera, tape, RF, and CRT — rendered entirely in WebGPU compute
+              shaders. Feed it a pattern, image, video, or your webcam and degrade it however you like.
+            </p>
+            <div className={styles.helpHead}>Getting started</div>
+            <ol className={styles.helpList}>
+              <li>
+                Pick an <b>Input</b> (A is the main source; B mixes a second in).
+              </li>
+              <li>
+                Click a <b>Preset</b> for an instant look, then tweak the sliders below.
+              </li>
+              <li>Hover a preset to preview which knobs it changes.</li>
+            </ol>
+            <div className={styles.helpHead}>Keyboard</div>
+            <ul className={styles.helpList}>
+              <li>
+                <b>1–8</b> recall a slot · <b>Shift+1–8</b> save the current look to a slot
+              </li>
+              <li>
+                <b>C</b> (hold) compare against the clean signal
+              </li>
+              <li>
+                <b>F</b> fullscreen · <b>Esc</b> close dialogs
+              </li>
+            </ul>
+            <div className={styles.helpHead}>More</div>
+            <p className={styles.muted} style={{ margin: 0 }}>
+              The <b>gear</b> icon holds render scale and MIDI setup. Source code and notes on{' '}
+              <a className={styles.link} href="https://github.com/cmdcolin/phosphene" target="_blank" rel="noreferrer">
+                GitHub ↗
+              </a>
+              .
+            </p>
           </div>
         </div>
       ) : null}
