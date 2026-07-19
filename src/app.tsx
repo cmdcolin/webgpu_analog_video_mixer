@@ -456,7 +456,17 @@ export function App() {
       </div>
       {fullscreen ? null : (
         <div style={panelStyle}>
-          <h2 style={{ fontSize: 13, margin: '4px 0 10px' }}>video_feedback — NTSC signal path</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', margin: '4px 0 10px' }}>
+            <h2 style={{ fontSize: 13, margin: 0 }}>video_feedback — NTSC signal path</h2>
+            <a
+              href="https://github.com/cmdcolin/webgpu_analog_video_mixer"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: '#7fd0a0', fontSize: 11 }}
+            >
+              GitHub ↗
+            </a>
+          </div>
 
           <Section title="Performance">
             <Slider
