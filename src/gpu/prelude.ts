@@ -43,6 +43,12 @@ export const PARAM_DEFS: ReadonlyArray<readonly [string, ParamType]> = [
   ['bShiftLine', 'f32'], // horizontal skew per line (line-frequency offset)
   ['bPhase0', 'f32'], // subcarrier detune phase base (accumulated)
   ['bPhaseLine', 'f32'], // subcarrier detune phase per line
+  ['bHue', 'f32'], // B proc-amp hue trim, radians
+  ['bVidGain', 'f32'], // B proc-amp video gain
+  ['bInv', 'f32'], // B video inversion amount (0.5 = solarized midpoint)
+  ['wipeMode', 'f32'], // 0 off, 1 h, 2 v, 3 box, 4 diamond
+  ['wipePos', 'f32'], // wipe position incl. auto-sweep (accumulated)
+  ['wipeSoft', 'f32'], // wipe edge softness
   // decoder
   ['combMode', 'f32'], // 0 chroma trap, 1 two-line comb, 2 three-line comb
   ['hHold', 'f32'], // sync PLL gain (horizontal hold)
@@ -80,6 +86,7 @@ export const PARAM_DEFS: ReadonlyArray<readonly [string, ParamType]> = [
   ['cfbKey', 'f32'], // luma key amount, negative inverts polarity
   ['cfbKeyLevel', 'f32'], // key slice level, IRE
   ['cfbKeySoft', 'f32'], // key edge softness, IRE
+  ['cfbTrail', 'f32'], // frame-store peak-hold decay (trails), 0 = plain capture
   // display
   ['scanBeam', 'f32'], // finite beam-spot strength between scanlines
   ['dbgView', 'f32'], // 0 normal, 1 gradient (present test), 2 raw composite (encode test)

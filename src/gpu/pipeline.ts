@@ -30,6 +30,7 @@ import fbCompositeSrc from './shaders/fb_composite.wgsl?raw'
 import lineAnalyzeSrc from './shaders/line_analyze.wgsl?raw'
 import mixBSrc from './shaders/mix_b.wgsl?raw'
 import presentSrc from './shaders/present.wgsl?raw'
+import storePrevSrc from './shaders/store_prev.wgsl?raw'
 import syncSrc from './shaders/sync.wgsl?raw'
 
 const N = SAMPLES_PER_LINE * LINES
@@ -82,12 +83,21 @@ export const DEFAULT_CONTROLS = {
   cfbKey: 0,
   cfbKeyLevel: 45,
   cfbKeySoft: 8,
+  cfbHold: 0,
+  cfbTrail: 0,
   // dirty mixer (source B, non-genlocked)
   bGain: 0,
   bRing: 0,
   bLineHz: 0.15,
   bDetuneHz: 40,
   bRollLps: 0.1,
+  bHueDeg: 0,
+  bVidGain: 1,
+  bInv: 0,
+  wipeMode: 0,
+  wipePos: 0.5,
+  wipeSoft: 0.05,
+  wipeRate: 0,
   // display
   scanBeam: 0.3,
 }
@@ -157,6 +167,7 @@ export class Engine {
   private underDownPl: GPUComputePipeline
   private mixBPl: GPUComputePipeline
   private fbCompositePl: GPUComputePipeline
+  private storePrevPl: GPUComputePipeline
   private channelPl: GPUComputePipeline
   private timebasePl: GPUComputePipeline
   private syncPl: GPUComputePipeline
@@ -169,6 +180,7 @@ export class Engine {
   private encodeYuvBBg: GPUBindGroup
   private mixBBg: GPUBindGroup
   private fbCompositeBg: GPUBindGroup
+  private storePrevBg: GPUBindGroup
   private encodeCompositeBg: GPUBindGroup
   private chromaExtractBg: GPUBindGroup
   private underDownBg: GPUBindGroup
@@ -239,6 +251,7 @@ export class Engine {
     this.encodeCompositePl = compute(encodeCompositeSrc)
     this.mixBPl = compute(mixBSrc)
     this.fbCompositePl = compute(fbCompositeSrc)
+    this.storePrevPl = compute(storePrevSrc)
     this.chromaExtractPl = compute(chromaExtractSrc)
     this.underDownPl = compute(underDownSrc)
     this.channelPl = compute(channelSrc)
@@ -279,6 +292,11 @@ export class Engine {
       { buffer: this.paramsBuf },
       { buffer: this.compPrev },
       { buffer: this.compA },
+    ])
+    this.storePrevBg = bg(this.storePrevPl, [
+      { buffer: this.paramsBuf },
+      { buffer: this.compA },
+      { buffer: this.compPrev },
     ])
     this.encodeCompositeBg = bg(this.encodeCompositePl, [
       { buffer: this.paramsBuf },
@@ -472,6 +490,11 @@ export class Engine {
       fbKnee: c.fbKnee,
       bGain: c.bGain,
       bRing: c.bRing,
+      bHue: (c.bHueDeg * Math.PI) / 180,
+      bVidGain: c.bVidGain,
+      bInv: c.bInv,
+      wipeMode: c.wipeMode,
+      wipeSoft: c.wipeSoft,
       cfbMix: c.cfbMix,
       cfbGain: c.cfbGain,
       cfbDelay: c.cfbDelayUs * 1e-6 * SAMPLE_RATE,
@@ -479,6 +502,7 @@ export class Engine {
       cfbKey: c.cfbKey,
       cfbKeyLevel: c.cfbKeyLevel,
       cfbKeySoft: c.cfbKeySoft,
+      cfbTrail: c.cfbTrail,
       soundIre: c.soundIre,
       agc: c.agc,
       scanBeam: c.scanBeam,
@@ -537,7 +561,13 @@ export class Engine {
     }
     if (this.filtersDirty) this.rebuildFilters()
     const c = this.controls
-    const mixU = this.mixState.update({ bLineHz: c.bLineHz, bDetuneHz: c.bDetuneHz, bRollLps: c.bRollLps })
+    const mixU = this.mixState.update({
+      bLineHz: c.bLineHz,
+      bDetuneHz: c.bDetuneHz,
+      bRollLps: c.bRollLps,
+      wipePos: c.wipePos,
+      wipeRateHz: c.wipeRate,
+    })
     packParams({ ...this.uniformValues(), ...mixU }, this.paramScratch)
     d.queue.writeBuffer(this.paramsBuf, 0, this.paramScratch)
     d.queue.writeBuffer(
@@ -576,9 +606,15 @@ export class Engine {
     run(this.syncPl, this.syncBg, 1, 1)
     run(this.lineAnalyzePl, this.lineAnalyzeBg, LINES, 1)
     run(this.decodePl, this.decodeBg, Math.ceil(ACTIVE_WIDTH / 64), ACTIVE_HEIGHT)
+    // frame-store capture of what the decoder saw; strobe holds by skipping.
+    // Trails force an even period so every capture shares one subcarrier
+    // frame parity — a mixed-parity store scrambles hue beyond what
+    // burst-lock can correct.
+    const period = c.cfbTrail > 0 ? 2 * Math.ceil((c.cfbHold + 1) / 2) : Math.round(c.cfbHold) + 1
+    if (this.frame % period === 0) {
+      run(this.storePrevPl, this.storePrevBg, Math.ceil(SAMPLES_PER_LINE / 64), LINES)
+    }
     pass.end()
-    // the mixer loop feeds back what the decoder saw this frame
-    enc.copyBufferToBuffer(this.compA, 0, this.compPrev, 0, N * 4)
 
     const rp = enc.beginRenderPass({
       colorAttachments: [

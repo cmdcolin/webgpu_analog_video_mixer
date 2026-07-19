@@ -40,6 +40,8 @@ export const GROUPS: Group[] = [
       { key: 'cfbKey', label: 'luma key', min: -1, max: 1, step: 0.01, unit: '' },
       { key: 'cfbKeyLevel', label: 'key level', min: 0, max: 100, step: 0.5, unit: 'IRE' },
       { key: 'cfbKeySoft', label: 'key soft', min: 1, max: 30, step: 0.5, unit: 'IRE' },
+      { key: 'cfbHold', label: 'strobe hold', min: 0, max: 60, step: 1, unit: 'frames' },
+      { key: 'cfbTrail', label: 'trails', min: 0, max: 0.98, step: 0.01, unit: '' },
     ],
   },
   {
@@ -50,6 +52,18 @@ export const GROUPS: Group[] = [
       { key: 'bLineHz', label: 'line offset', min: -8, max: 8, step: 0.01, unit: 'Hz' },
       { key: 'bDetuneHz', label: 'sc detune', min: -400, max: 400, step: 0.5, unit: 'Hz' },
       { key: 'bRollLps', label: 'frame roll', min: -3, max: 3, step: 0.01, unit: 'l/f' },
+      { key: 'bHueDeg', label: 'B hue', min: -180, max: 180, step: 1, unit: 'deg' },
+      { key: 'bVidGain', label: 'B video gain', min: 0, max: 2, step: 0.01, unit: 'x' },
+      { key: 'bInv', label: 'B invert', min: 0, max: 1, step: 0.01, unit: '' },
+    ],
+  },
+  {
+    name: 'Wipe (A/B)',
+    sliders: [
+      { key: 'wipeMode', label: 'pattern (0 off, h, v, box, diamond)', min: 0, max: 4, step: 1, unit: '' },
+      { key: 'wipePos', label: 'position', min: 0, max: 1, step: 0.001, unit: '' },
+      { key: 'wipeSoft', label: 'softness', min: 0, max: 0.5, step: 0.005, unit: '' },
+      { key: 'wipeRate', label: 'sweep', min: 0, max: 2, step: 0.01, unit: 'Hz' },
     ],
   },
   {

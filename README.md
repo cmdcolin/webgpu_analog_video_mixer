@@ -38,8 +38,8 @@ IRE levels, real sync tips + 9-cycle colorburst in the buffer. Compute passes:
 |---|---|---|
 | compose | `compose.wgsl` | camera-at-monitor feedback (affine reframe, lens defocus + vignette, sensor black cut + s-curve) + source mix |
 | encode | `encode_yuv.wgsl`, `encode_composite.wgsl` | RGB→YUV, FIR-bandlimited quadrature modulation onto the subcarrier, sync/burst generation |
-| dirty mix | `mix_b.wgsl` | second non-genlocked NTSC generator (slipping/skewed line timing, rolling frame, detuned subcarrier) summed or ring-modulated into the composite |
-| mixer loop | `fb_composite.wgsl` | last frame's degraded composite crossfaded back in electrically; self luma key, cable-delay hue spin, inverting gain, amplifier rail clipping |
+| dirty mix | `mix_b.wgsl` | second non-genlocked NTSC generator (slipping/skewed line timing, rolling frame, detuned subcarrier) summed or ring-modulated into the composite, through a B-bus proc amp (hue/gain/invert) and pattern-generator wipes |
+| mixer loop | `fb_composite.wgsl`, `store_prev.wgsl` | last frame's degraded composite crossfaded back in electrically; self luma key, cable-delay hue spin, inverting gain, rail clipping; frame store with strobe hold and peak-hold trails |
 | chroma extract | `chroma_extract.wgsl` | bandpass at fsc |
 | color-under | `under_down.wgsl` | VHS heterodyne down to 629 kHz + lowpass |
 | channel | `channel.wgsl` | luma bandwidth/peaking FIR, color-under playback (phase-jittered up-conversion), multipath ghost, noise, hum, 4.5 MHz sound-carrier leak, RF dropouts, head-switch noise |
