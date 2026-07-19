@@ -16,7 +16,7 @@ export interface Group {
 
 export const GROUPS: Group[] = [
   {
-    name: 'Feedback',
+    name: 'Camera Feedback',
     sliders: [
       { key: 'fbMix', label: 'mix', min: 0, max: 1, step: 0.01, unit: '' },
       { key: 'fbZoom', label: 'zoom', min: 0.7, max: 1.6, step: 0.005, unit: 'x' },

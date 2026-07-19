@@ -1,7 +1,8 @@
 # video_feedback
 
-**[▶ Live demo](https://cmdcolin.github.io/webgpu_analog_video_mixer/)** — needs a
-WebGPU browser (Chrome/Edge 113+, or Firefox 141+ / Nightly with `dom.webgpu.enabled`).
+Live demo - https://cmdcolin.github.io/webgpu_analog_video_mixer/
+
+Needs a WebGPU-enabled browser
 
 Real-time analog video glitch as **signal-level simulation**, not image filters.
 Every frame is encoded to a physically-modeled NTSC composite waveform, degraded

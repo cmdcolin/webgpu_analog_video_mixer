@@ -28,6 +28,45 @@ const btnStyle: React.CSSProperties = {
   cursor: 'pointer',
 }
 
+const fsBtnStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: 12,
+  right: 12,
+  background: 'rgba(22,22,26,0.6)',
+  color: '#c8c8d0',
+  border: '1px solid #3a3a44',
+  borderRadius: 3,
+  padding: '4px 9px',
+  fontFamily: 'monospace',
+  fontSize: 11,
+  cursor: 'pointer',
+}
+
+const sectionHeadStyle: React.CSSProperties = {
+  fontSize: 11,
+  margin: '12px 0 2px',
+  color: '#8888a0',
+  textTransform: 'uppercase',
+  cursor: 'pointer',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  userSelect: 'none',
+}
+
+function Section(props: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true)
+  return (
+    <div>
+      <h3 style={sectionHeadStyle} onClick={() => setOpen((o) => !o)}>
+        <span>{props.title}</span>
+        <span style={{ color: '#5a5a66' }}>{open ? '▾' : '▸'}</span>
+      </h3>
+      {open ? props.children : null}
+    </div>
+  )
+}
+
 const fatalWrapStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -122,6 +161,15 @@ export function App() {
   const [values, setValues] = useState({ ...DEFAULT_CONTROLS })
   const [sourceMode, setSourceMode] = useState<SourceMode>('bars')
   const [sourceBMode, setSourceBMode] = useState<SourceBMode>('bars')
+  const [fullscreen, setFullscreen] = useState(false)
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen()
+    } else {
+      document.documentElement.requestFullscreen()
+    }
+  }
 
   const applyControls = (controls: Controls) => {
     setValues(controls)
@@ -131,9 +179,16 @@ export function App() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (canvas) {
-      const dpr = window.devicePixelRatio
-      canvas.width = canvas.clientWidth * dpr
-      canvas.height = canvas.clientHeight * dpr
+      const resize = () => {
+        const dpr = window.devicePixelRatio
+        canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr))
+        canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr))
+      }
+      resize()
+      // Keep the drawing buffer matched to the element as the panel hides or
+      // the window enters fullscreen, so the picture never stretches.
+      const ro = new ResizeObserver(resize)
+      ro.observe(canvas)
       let disposed = false
       Engine.create(canvas).then(
         (engine) => {
@@ -171,6 +226,7 @@ export function App() {
       )
       return () => {
         disposed = true
+        ro.disconnect()
         stopVideo()
         stopVideoB()
         engineRef.current?.destroy()
@@ -182,7 +238,10 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const engine = engineRef.current
-      if (engine && e.key >= '1' && e.key <= '8' && !(e.target instanceof HTMLInputElement)) {
+      const typing = e.target instanceof HTMLInputElement
+      if (!typing && e.key === 'f') {
+        toggleFullscreen()
+      } else if (!typing && engine && e.key >= '1' && e.key <= '8') {
         const slot = Number(e.key)
         if (e.shiftKey) {
           saveSlot(slot, engine.controls)
@@ -192,8 +251,13 @@ export function App() {
         }
       }
     }
+    const onFs = () => setFullscreen(document.fullscreenElement !== null)
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    document.addEventListener('fullscreenchange', onFs)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('fullscreenchange', onFs)
+    }
   }, [])
 
   const setControl = (key: ControlKey, v: number) => {
@@ -331,6 +395,9 @@ export function App() {
             {error}
           </div>
         )}
+        <button style={fsBtnStyle} onClick={toggleFullscreen} title="toggle fullscreen (f)">
+          {fullscreen ? '⤢ exit' : '⛶ fullscreen'}
+        </button>
         <div
           style={{
             position: 'absolute',
@@ -344,79 +411,82 @@ export function App() {
           {fps.toFixed(0)} fps
         </div>
       </div>
-      <div style={panelStyle}>
-        <h2 style={{ fontSize: 13, margin: '4px 0 10px' }}>video_feedback — NTSC signal path</h2>
+      {fullscreen ? null : (
+        <div style={panelStyle}>
+          <h2 style={{ fontSize: 13, margin: '4px 0 10px' }}>video_feedback — NTSC signal path</h2>
 
-        <h3 style={{ fontSize: 11, margin: '10px 0 2px', color: '#8888a0', textTransform: 'uppercase' }}>Source</h3>
-        {(['bars', 'sweep', 'file', 'webcam'] as const).map((mode) => (
-          <button
-            key={mode}
-            style={{ ...btnStyle, borderColor: sourceMode === mode ? '#7fd0a0' : '#3a3a44' }}
-            onClick={() => selectSource(mode)}
-          >
-            {mode}
-          </button>
-        ))}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="video/*,image/*"
-          style={{ display: 'none' }}
-          onChange={(e) => onFile(e.target.files?.[0])}
-        />
-
-        <h3 style={{ fontSize: 11, margin: '10px 0 2px', color: '#8888a0', textTransform: 'uppercase' }}>
-          Source B (dirty mix)
-        </h3>
-        {(['none', 'bars', 'sweep', 'file'] as const).map((mode) => (
-          <button
-            key={mode}
-            style={{ ...btnStyle, borderColor: sourceBMode === mode ? '#7fd0a0' : '#3a3a44' }}
-            onClick={() => selectSourceB(mode)}
-          >
-            {mode}
-          </button>
-        ))}
-        <input
-          ref={fileInputBRef}
-          type="file"
-          accept="video/*,image/*"
-          style={{ display: 'none' }}
-          onChange={(e) => onFileB(e.target.files?.[0])}
-        />
-
-        <h3 style={{ fontSize: 11, margin: '10px 0 2px', color: '#8888a0', textTransform: 'uppercase' }}>Presets</h3>
-        {Object.entries(BUILTIN_PRESETS).map(([name, patch]) => (
-          <button key={name} style={btnStyle} onClick={() => applyControls(presetControls(patch))}>
-            {name}
-          </button>
-        ))}
-        <button style={{ ...btnStyle, borderColor: '#a05050' }} onClick={() => applyControls({ ...DEFAULT_CONTROLS })}>
-          reset all
-        </button>
-        <div style={{ color: '#666', margin: '4px 0' }}>keys 1-8 load slot, shift+1-8 save</div>
-
-        {GROUPS.map((group) => (
-          <div key={group.name}>
-            <h3 style={{ fontSize: 11, margin: '12px 0 2px', color: '#8888a0', textTransform: 'uppercase' }}>
-              {group.name}
-            </h3>
-            {group.sliders.map((s) => (
-              <Slider
-                key={s.key}
-                label={s.label}
-                unit={s.unit}
-                min={s.min}
-                max={s.max}
-                step={s.step}
-                value={values[s.key]}
-                defaultValue={DEFAULT_CONTROLS[s.key]}
-                onChange={(v) => setControl(s.key, v)}
-              />
+          <Section title="Source">
+            {(['bars', 'sweep', 'file', 'webcam'] as const).map((mode) => (
+              <button
+                key={mode}
+                style={{ ...btnStyle, borderColor: sourceMode === mode ? '#7fd0a0' : '#3a3a44' }}
+                onClick={() => selectSource(mode)}
+              >
+                {mode}
+              </button>
             ))}
-          </div>
-        ))}
-      </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/*,image/*"
+              style={{ display: 'none' }}
+              onChange={(e) => onFile(e.target.files?.[0])}
+            />
+          </Section>
+
+          <Section title="Source B (dirty mix)">
+            {(['none', 'bars', 'sweep', 'file'] as const).map((mode) => (
+              <button
+                key={mode}
+                style={{ ...btnStyle, borderColor: sourceBMode === mode ? '#7fd0a0' : '#3a3a44' }}
+                onClick={() => selectSourceB(mode)}
+              >
+                {mode}
+              </button>
+            ))}
+            <input
+              ref={fileInputBRef}
+              type="file"
+              accept="video/*,image/*"
+              style={{ display: 'none' }}
+              onChange={(e) => onFileB(e.target.files?.[0])}
+            />
+          </Section>
+
+          <Section title="Presets">
+            {Object.entries(BUILTIN_PRESETS).map(([name, patch]) => (
+              <button key={name} style={btnStyle} onClick={() => applyControls(presetControls(patch))}>
+                {name}
+              </button>
+            ))}
+            <button
+              style={{ ...btnStyle, borderColor: '#a05050' }}
+              onClick={() => applyControls({ ...DEFAULT_CONTROLS })}
+            >
+              reset all
+            </button>
+            <div style={{ color: '#666', margin: '4px 0' }}>keys 1-8 load slot, shift+1-8 save · f fullscreen</div>
+          </Section>
+
+          {GROUPS.map((group) => (
+            <Section key={group.name} title={group.name}>
+              {group.sliders.map((s) => (
+                <Slider
+                  key={s.key}
+                  label={s.label}
+                  unit={s.unit}
+                  min={s.min}
+                  max={s.max}
+                  step={s.step}
+                  value={values[s.key]}
+                  defaultValue={DEFAULT_CONTROLS[s.key]}
+                  onChange={(v) => setControl(s.key, v)}
+                />
+              ))}
+            </Section>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
