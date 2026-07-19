@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { DEFAULT_CONTROLS, Engine } from './gpu/pipeline'
 import type { ControlKey, Controls } from './gpu/pipeline'
 import { smpteBars, sweep } from './sources/pattern'
-import { GROUPS } from './ui/controls'
+import { GROUPS, type Group } from './ui/controls'
 import { SYNCABLE_KEYS, SYNC_DIVISIONS, createMidi, syncedValue } from './ui/midi'
 import type { BindingMap, MidiManager, MidiStatus } from './ui/midi'
 import { changedKeys, loadSlots, matchPreset, PRESETS, presetControls, saveSlot } from './ui/presets'
@@ -10,7 +10,15 @@ import styles from './app.module.css'
 
 const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ')
 
+// useSyncExternalStore fallbacks for the window before the async engine exists.
+const subscribeNever = () => () => {}
+const getDefaultControls = (): Controls => DEFAULT_CONTROLS
+
 const LABEL_BY_KEY = new Map(GROUPS.flatMap((g) => g.sliders).map((s) => [s.key, s.label]))
+// A/B mix groups live next to the Input row (shown when B is on); the rest fill
+// the collapsible group list at the bottom of the panel.
+const AB_GROUPS = GROUPS.filter((g) => g.ab)
+const MAIN_GROUPS = GROUPS.filter((g) => !g.ab)
 const SYNCABLE_SET = new Set<ControlKey>(SYNCABLE_KEYS)
 
 // Which rate controls are clock-locked, and to which SYNC_DIVISIONS index.
@@ -156,7 +164,13 @@ export function App() {
   const [error, setError] = useState('')
   const [fatal, setFatal] = useState<Fatal | null>(null)
   const [fps, setFps] = useState(0)
-  const [values, setValues] = useState({ ...DEFAULT_CONTROLS })
+  const [engine, setEngine] = useState<Engine | null>(null)
+  // The engine IS the store: React reads controls straight from it via
+  // useSyncExternalStore, so there's no separate `values` copy to keep in sync.
+  const controls = useSyncExternalStore(
+    engine === null ? subscribeNever : engine.subscribeControls,
+    engine === null ? getDefaultControls : engine.getControls,
+  )
   const [sourceMode, setSourceMode] = useState<SourceMode>('bars')
   const [sourceBMode, setSourceBMode] = useState<SourceBMode>('bars')
   const [fullscreen, setFullscreen] = useState(false)
@@ -175,11 +189,6 @@ export function App() {
   const [hoverPreset, setHoverPreset] = useState<string | null>(null)
   const [lastPreset, setLastPreset] = useState<string | null>(null)
   const [comparing, setComparing] = useState(false)
-  const compareRef = useRef<Controls | null>(null)
-  // Mirror the latest values so the keyboard compare handler (bound once) reads
-  // fresh state without re-binding.
-  const valuesRef = useRef(values)
-  valuesRef.current = values
 
   // Backing-store size = css size × min(dpr,2) × render scale. Lowering the
   // scale is a cheap speed lever (the present pass runs per output pixel).
@@ -201,11 +210,10 @@ export function App() {
     }
   }
 
-  const applyControls = (controls: Controls) => {
-    setValues(controls)
-    engineRef.current?.applyControls(controls)
+  const applyControls = (next: Controls) => {
+    engineRef.current?.applyControls(next)
     const midi = midiRef.current
-    if (midi) for (const k of Object.keys(controls) as ControlKey[]) midi.setExternal(k, controls[k])
+    if (midi) for (const k of Object.keys(next) as ControlKey[]) midi.setExternal(k, next[k])
   }
 
   const applyPreset = (name: string, patch: Partial<Controls>) => {
@@ -213,21 +221,14 @@ export function App() {
     setLastPreset(name)
   }
 
-  // Hold-to-compare: momentarily push the clean defaults to the engine without
-  // touching React state (sliders stay put), then restore on release.
+  // Hold-to-compare: preview the clean defaults on the render path without
+  // touching the store (sliders stay put), then restore from it on release.
   const startCompare = () => {
-    const engine = engineRef.current
-    if (engine && compareRef.current === null) {
-      compareRef.current = { ...valuesRef.current }
-      engine.applyControls({ ...DEFAULT_CONTROLS })
-      setComparing(true)
-    }
+    engineRef.current?.preview({ ...DEFAULT_CONTROLS })
+    setComparing(true)
   }
   const endCompare = () => {
-    const engine = engineRef.current
-    const saved = compareRef.current
-    if (engine && saved !== null) engine.applyControls(saved)
-    compareRef.current = null
+    engineRef.current?.preview(null)
     setComparing(false)
   }
 
@@ -246,6 +247,7 @@ export function App() {
             engine.destroy()
           } else {
             engineRef.current = engine
+            setEngine(engine)
             window.vf = engine
             engine.onStats = setFps
             engine.onDeviceLost = (m) =>
@@ -261,7 +263,6 @@ export function App() {
                 const n = Number(v)
                 if (k in DEFAULT_CONTROLS && Number.isFinite(n)) patch[k as ControlKey] = n
               }
-              setValues((prev) => ({ ...prev, ...patch }))
               engine.applyControls(patch)
             }
             if (q.get('src') === 'sweep') {
@@ -311,7 +312,6 @@ export function App() {
   useEffect(() => {
     const midi = createMidi({
       onControl: (key, v) => {
-        setValues((prev) => ({ ...prev, [key]: v }))
         engineRef.current?.setControl(key, v)
       },
       onStatus: setMidiStatus,
@@ -365,7 +365,6 @@ export function App() {
   }, [])
 
   const setControl = (key: ControlKey, v: number) => {
-    setValues((prev) => ({ ...prev, [key]: v }))
     engineRef.current?.setControl(key, v)
     midiRef.current?.setExternal(key, v)
   }
@@ -389,7 +388,7 @@ export function App() {
   // compute it during render instead of storing it in state.
   const displayValue = (key: ControlKey): number => {
     const div = syncMap[key]
-    return div !== undefined && bpm !== null ? syncedValue(key, bpm, SYNC_DIVISIONS[div].beats) : values[key]
+    return div !== undefined && bpm !== null ? syncedValue(key, bpm, SYNC_DIVISIONS[div].beats) : controls[key]
   }
   const wipeRateValue = displayValue('wipeRate')
   const bLineHzValue = displayValue('bLineHz')
@@ -425,8 +424,8 @@ export function App() {
   // Serialize non-default controls into the ?set= URL the loader already reads.
   const copyLink = () => {
     const set = (Object.keys(DEFAULT_CONTROLS) as ControlKey[])
-      .filter((k) => values[k] !== DEFAULT_CONTROLS[k])
-      .map((k) => `${k}:${+values[k].toFixed(4)}`)
+      .filter((k) => controls[k] !== DEFAULT_CONTROLS[k])
+      .map((k) => `${k}:${+controls[k].toFixed(4)}`)
     const q = [...(set.length ? [`set=${set.join(',')}`] : [])]
     if (sourceMode === 'sweep' || sourceMode === 'webcam') q.push(`src=${sourceMode}`)
     if (sourceBMode === 'none' || sourceBMode === 'sweep') q.push(`srcb=${sourceBMode}`)
@@ -556,9 +555,9 @@ export function App() {
     }
   }
 
-  const active = matchPreset(values)
+  const active = matchPreset(controls)
   const hoverDef = hoverPreset === null ? undefined : PRESETS.find((p) => p.name === hoverPreset)
-  const hoverKeys = hoverDef === undefined ? null : changedKeys(hoverDef.patch, values)
+  const hoverKeys = hoverDef === undefined ? null : changedKeys(hoverDef.patch, controls)
   const presetGroups = PRESETS.reduce<{ name: string; defs: typeof PRESETS }[]>((acc, p) => {
     const g = acc.find((x) => x.name === p.group)
     if (g === undefined) acc.push({ name: p.group, defs: [p] })
@@ -573,6 +572,32 @@ export function App() {
       : lastPreset === null
         ? 'hover a preset to preview what it changes; click to apply.'
         : `modified from "${lastPreset}"`
+
+  const renderGroup = (group: Group, defaultOpen: boolean) => (
+    <Section
+      key={group.name}
+      title={group.name}
+      defaultOpen={defaultOpen}
+      flagged={hoverKeys !== null && group.sliders.some((s) => hoverKeys.has(s.key))}
+    >
+      {group.sliders.map((s) => (
+        <Slider
+          key={s.key}
+          label={s.label}
+          unit={s.unit}
+          min={s.min}
+          max={s.max}
+          step={s.step}
+          value={displayValue(s.key)}
+          defaultValue={DEFAULT_CONTROLS[s.key]}
+          onChange={(v) => setControl(s.key, v)}
+          highlight={hoverKeys?.has(s.key) ?? false}
+          midi={midiStatus === 'ready' ? { label: bindLabel(s.key), armed: armedKey === s.key, onArm: () => armMidi(s.key) } : undefined}
+          sync={midiStatus === 'ready' && SYNCABLE_SET.has(s.key) ? { label: syncLabel(s.key), live: bpm !== null, onCycle: () => cycleSync(s.key) } : undefined}
+        />
+      ))}
+    </Section>
+  )
 
   return fatal !== null ? (
     <div className={styles.fatalWrap}>
@@ -689,6 +714,11 @@ export function App() {
                 e.target.value = '' // allow re-picking the same file
               }}
             />
+            {sourceBMode === 'none' ? (
+              <div className={styles.hint}>pick a source B above to mix a second signal in.</div>
+            ) : (
+              AB_GROUPS.map((group) => renderGroup(group, true))
+            )}
           </div>
 
           <Section title="Presets">
@@ -775,39 +805,7 @@ export function App() {
             </Section>
           ) : null}
 
-          {GROUPS.map((group) => (
-            <Section
-              key={group.name}
-              title={group.name}
-              defaultOpen={false}
-              flagged={hoverKeys !== null && group.sliders.some((s) => hoverKeys.has(s.key))}
-            >
-              {group.sliders.map((s) => (
-                <Slider
-                  key={s.key}
-                  label={s.label}
-                  unit={s.unit}
-                  min={s.min}
-                  max={s.max}
-                  step={s.step}
-                  value={displayValue(s.key)}
-                  defaultValue={DEFAULT_CONTROLS[s.key]}
-                  onChange={(v) => setControl(s.key, v)}
-                  highlight={hoverKeys?.has(s.key) ?? false}
-                  midi={
-                    midiStatus === 'ready'
-                      ? { label: bindLabel(s.key), armed: armedKey === s.key, onArm: () => armMidi(s.key) }
-                      : undefined
-                  }
-                  sync={
-                    midiStatus === 'ready' && SYNCABLE_SET.has(s.key)
-                      ? { label: syncLabel(s.key), live: bpm !== null, onCycle: () => cycleSync(s.key) }
-                      : undefined
-                  }
-                />
-              ))}
-            </Section>
-          ))}
+          {MAIN_GROUPS.map((group) => renderGroup(group, false))}
         </div>
       )}
       {showAdvanced ? (

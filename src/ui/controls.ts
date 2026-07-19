@@ -12,9 +12,16 @@ export interface SliderDef {
 export interface Group {
   name: string
   sliders: SliderDef[]
+  // A/B mix groups: surfaced next to the Input row when source B is on,
+  // rather than buried in the generic group list at the bottom.
+  ab?: boolean
 }
 
 export const GROUPS: Group[] = [
+  {
+    name: 'Signal (source A)',
+    sliders: [{ key: 'invert', label: 'invert (polarity swap)', min: 0, max: 1, step: 0.01, unit: '' }],
+  },
   {
     name: 'Camera Feedback',
     sliders: [
@@ -46,6 +53,7 @@ export const GROUPS: Group[] = [
   },
   {
     name: 'Dirty Mix (source B)',
+    ab: true,
     sliders: [
       { key: 'bGain', label: 'B gain', min: 0, max: 1.2, step: 0.01, unit: 'x' },
       { key: 'bRing', label: 'ring mod', min: 0, max: 1, step: 0.01, unit: '' },
@@ -59,6 +67,7 @@ export const GROUPS: Group[] = [
   },
   {
     name: 'Wipe (A/B)',
+    ab: true,
     sliders: [
       { key: 'wipeMode', label: 'pattern (0 off, h, v, box, diamond)', min: 0, max: 4, step: 1, unit: '' },
       { key: 'wipePos', label: 'position', min: 0, max: 1, step: 0.001, unit: '' },
