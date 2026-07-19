@@ -27,12 +27,13 @@ pnpm dev
   independent source B for the dirty mixer.
 - **Presets**: built-ins + 8 save slots (`1`-`8` load, `shift+1`-`8` save).
 - **URL params**: `?set=key:value,...`, `?vurl=…`, `?src=sweep|webcam`,
-  `?dbg=1..5`.
+  `?dbg=1..5`, `?prof` (per-pass GPU timings in the console, needs
+  timestamp-query support).
 
 The compute passes live in `src/gpu/shaders/*.wgsl` (encode → dirty mix → mixer
-loop → chroma extract → color-under → channel → timebase → sync → decode →
-present). FIR kernels are windowed-sinc designed from real MHz specs in
-`src/signal/filters.ts`.
+loop → [chroma extract → color-under → channel → timebase] × dub generations →
+sync → decode → present). FIR kernels are windowed-sinc designed from real MHz
+specs in `src/signal/filters.ts`.
 
 ## Verification harness
 

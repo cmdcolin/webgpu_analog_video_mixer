@@ -17,5 +17,5 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let n = row * SPL + s;
   let pos = f32(n) + lineParams[row].x;
   let i0 = i32(floor(pos));
-  dst[n] = mix(src[clampIdx(i0)], src[clampIdx(i0 + 1)], fract(pos));
+  dst[n] = catmull(src[clampIdx(i0 - 1)], src[clampIdx(i0)], src[clampIdx(i0 + 1)], src[clampIdx(i0 + 2)], fract(pos));
 }

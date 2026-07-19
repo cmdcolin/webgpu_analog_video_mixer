@@ -18,7 +18,10 @@ export async function initGpu(canvas: HTMLCanvasElement): Promise<Gpu> {
       'WebGPU is present but no GPU adapter is available — usually a blocklisted GPU/driver or hardware acceleration disabled. In Firefox try gfx.webgpu.ignore-blocklist; in Chrome enable hardware acceleration.',
     )
   }
-  const device = await adapter.requestDevice()
+  // timestamp-query powers the optional ?prof per-pass timings
+  const device = await adapter.requestDevice({
+    requiredFeatures: adapter.features.has('timestamp-query') ? ['timestamp-query'] : [],
+  })
   device.addEventListener('uncapturederror', (e) => {
     console.error('WebGPU uncaptured:', (e as GPUUncapturedErrorEvent).error.message)
   })

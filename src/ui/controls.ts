@@ -78,6 +78,7 @@ export const GROUPS: Group[] = [
       { key: 'soundIre', label: 'sound carrier', min: 0, max: 10, step: 0.1, unit: 'IRE' },
       { key: 'dropoutRate', label: 'dropouts', min: 0, max: 60, step: 1, unit: '/frame' },
       { key: 'dropoutLenUs', label: 'dropout len', min: 1, max: 25, step: 0.5, unit: 'us' },
+      { key: 'dubGens', label: 'dub generations', min: 1, max: 4, step: 1, unit: 'x' },
     ],
   },
   {

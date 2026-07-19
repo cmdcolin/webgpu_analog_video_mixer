@@ -2,8 +2,9 @@
 //  - luma path: (composite - chroma) through the bandwidth/peaking FIR
 //  - chroma path: direct, or up-converted back from color-under (with per-line
 //    playback phase jitter -> the VHS rainbow instability), re-bandpassed
-//  - multipath ghost, frequency-flat AM noise, 60Hz hum, RF dropouts,
+//  - multipath ghost, band-limited AM noise, 60Hz hum, RF dropouts,
 //    head-switch noise band
+// Runs once per dub generation; P.gen decorrelates the noise seeds.
 
 @group(0) @binding(0) var<uniform> P: Params;
 @group(0) @binding(1) var<storage, read> filters: array<f32>;
@@ -53,14 +54,16 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   // multipath ghost of the pre-channel signal
   if (P.ghostGain != 0.0) {
     let gpos = f32(n) - P.ghostDelay;
-    let g0 = clampIdx(i32(floor(gpos)));
-    let g1 = clampIdx(i32(floor(gpos)) + 1);
-    out = out + P.ghostGain * mix(comp[g0], comp[g1], fract(gpos));
+    let g0 = i32(floor(gpos));
+    out = out + P.ghostGain
+      * catmull(comp[clampIdx(g0 - 1)], comp[clampIdx(g0)], comp[clampIdx(g0 + 1)], comp[clampIdx(g0 + 2)], fract(gpos));
   }
 
-  // additive noise (snow)
+  // additive noise (snow), 1-2-1 band-limited: receiver noise comes through
+  // the IF filter, so it has no energy near the top of the 14.3 MHz raster
   if (P.noiseSigma > 0.0) {
-    out = out + P.noiseSigma * gauss(n ^ pcg(P.frame * 2654435761u));
+    let ns = pcg(P.frame * 2654435761u + P.gen * 2246822519u);
+    out = out + P.noiseSigma * 0.4082 * (gauss((n - 1u) ^ ns) + 2.0 * gauss(n ^ ns) + gauss((n + 1u) ^ ns));
   }
 
   // 60 Hz hum: one cycle per field, slowly rolling
@@ -85,14 +88,14 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let len = P.dropoutLen * (0.4 + 1.2 * rand01(h ^ 0x9134u));
     let fs = f32(s);
     if (fs >= start && fs < start + len) {
-      let snow = 55.0 + 45.0 * gauss(n ^ pcg(P.frame * 977u));
+      let snow = 55.0 + 45.0 * gauss(n ^ pcg(P.frame * 977u + P.gen * 7919u));
       out = mix(out, snow, 0.95);
     }
   }
 
   // head-switch disturbance band at the bottom of the picture
   if (P.headSwitchNoise > 0.0 && row >= HEAD_SWITCH_LINE && row < HEAD_SWITCH_LINE + 3u) {
-    out = out + P.headSwitchNoise * 25.0 * gauss(n ^ pcg(P.frame * 3121u + row));
+    out = out + P.headSwitchNoise * 25.0 * gauss(n ^ pcg(P.frame * 3121u + row + P.gen * 4423u));
   }
 
   outBuf[n] = out;

@@ -28,6 +28,7 @@ type ParamType = 'f32' | 'u32'
 
 export const PARAM_DEFS: ReadonlyArray<readonly [string, ParamType]> = [
   ['frame', 'u32'],
+  ['gen', 'u32'], // dub generation index: decorrelates noise/dropout seeds per pass
   ['encChromaTaps', 'u32'],
   ['demodTaps', 'u32'],
   ['lumaTaps', 'u32'],
@@ -94,6 +95,7 @@ export const PARAM_DEFS: ReadonlyArray<readonly [string, ParamType]> = [
 ] as const
 
 export const PARAM_BYTES = Math.ceil((PARAM_DEFS.length * 4) / 16) * 16
+export const GEN_OFFSET = PARAM_DEFS.findIndex(([n]) => n === 'gen') * 4
 
 export function packParams(values: Record<string, number>, out: ArrayBuffer): void {
   const dv = new DataView(out)
@@ -165,5 +167,12 @@ fn gauss(seed: u32) -> f32 {
   let a = max(rand01(seed), 1e-7);
   let b = rand01(seed ^ 0x9E3779B9u);
   return sqrt(-2.0 * log(a)) * cos(2.0 * PI * b);
+}
+
+// Catmull-Rom fractional-delay read. Linear interpolation is -6 dB at fsc for
+// half-sample offsets, so chroma pumps as a delay wanders; the cubic stays
+// flat past fsc. t = 0 returns p1 exactly.
+fn catmull(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
+  return p1 + 0.5 * t * (p2 - p0 + t * (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3 + t * (3.0 * (p1 - p2) + p3 - p0)));
 }
 `

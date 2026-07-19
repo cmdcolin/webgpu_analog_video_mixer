@@ -29,8 +29,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   if (gid.x >= ACTIVE_W || gid.y >= ACTIVE_H) {
     return;
   }
+  // roll wraps over the whole 525-line frame, so the VBI decodes as the
+  // classic rolling black bar instead of the picture wrapping seamlessly
   let vroll = timing[525u];
-  let row = ACTIVE_TOP + (gid.y + u32(vroll)) % ACTIVE_H;
+  let row = (ACTIVE_TOP + gid.y + u32(vroll)) % NLINES;
   let hoff = i32(round(timing[row]));
   let s = ACTIVE_START + gid.x;
   let n = clampIdx(i32(row * SPL + s) + hoff);
@@ -66,7 +68,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   // color killer when burst is gone
   let li = lineInfo[row];
   let locked = li.z > P.killThresh;
-  let e = select(0.0, atan2(li.y, li.x) - PI, locked) * P.burstLock;
+  // phase error measured about the expected 180 degrees: negating the burst
+  // components keeps the angle wrapped near zero, so a partial burstLock
+  // scales a continuous error instead of jumping a 2*pi branch on noise
+  let e = select(0.0, atan2(-li.y, -li.x), locked) * P.burstLock;
   let acc = select(0.0, clamp(BURST_AMP / max(li.z, 0.5), 0.0, 4.0), locked);
   let g = mix(1.0, acc, P.burstLock) * P.chromaGain;
 

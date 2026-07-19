@@ -14,10 +14,12 @@ import {
 } from '../signal/filters'
 import { FSC } from '../signal/constants'
 import { LineState } from '../signal/linestate'
+import type { LineStateControls } from '../signal/linestate'
 import { MixState } from '../signal/mixstate'
 import type { Gpu } from './context'
 import { initGpu } from './context'
-import { PARAM_BYTES, PRELUDE, packParams } from './prelude'
+import { GpuProfiler } from './profiler'
+import { GEN_OFFSET, PARAM_BYTES, PRELUDE, packParams } from './prelude'
 import channelSrc from './shaders/channel.wgsl?raw'
 import chromaExtractSrc from './shaders/chroma_extract.wgsl?raw'
 import composeSrc from './shaders/compose.wgsl?raw'
@@ -32,8 +34,11 @@ import mixBSrc from './shaders/mix_b.wgsl?raw'
 import presentSrc from './shaders/present.wgsl?raw'
 import storePrevSrc from './shaders/store_prev.wgsl?raw'
 import syncSrc from './shaders/sync.wgsl?raw'
+import syncMeasureSrc from './shaders/sync_measure.wgsl?raw'
 
 const N = SAMPLES_PER_LINE * LINES
+const LINE_PARAM_BYTES = LINES * 16
+const MAX_GENS = 4
 
 // All user-facing controls, in physical units.
 export const DEFAULT_CONTROLS = {
@@ -64,6 +69,7 @@ export const DEFAULT_CONTROLS = {
   headSwitchShiftUs: 0,
   tbJitterNs: 0,
   tbWowNs: 0,
+  dubGens: 1, // tape dub generations: the channel block runs this many times
   // feedback
   fbMix: 0,
   fbZoom: 1.05,
@@ -115,6 +121,18 @@ const TAPS = {
   underTaps: 55,
 }
 
+// One compute dispatch in the signal chain. `when` gates the dispatch on the
+// current controls; omitted means always. Bind groups are fixed except
+// compose's, which is rebuilt when the source raster resizes.
+interface Pass {
+  label: string
+  pl: GPUComputePipeline
+  bg: GPUBindGroup
+  x: number
+  y: number
+  when?: () => boolean
+}
+
 export class Engine {
   readonly controls: Controls = { ...DEFAULT_CONTROLS }
   onStats: (fps: number) => void = () => {}
@@ -135,8 +153,12 @@ export class Engine {
   private frameAcc = 0
   private frameCount = 0
   private rafId = 0
+  private renderErrors = 0
+  private profiler: GpuProfiler | null = null
 
   private paramsBuf: GPUBuffer
+  private genParamsBuf: GPUBuffer
+  private genLineParamsBuf: GPUBuffer
   private filterBuf: GPUBuffer
   private yuvBuf: GPUBuffer
   private yuvBBuf: GPUBuffer
@@ -148,6 +170,7 @@ export class Engine {
   private lineInfoBuf: GPUBuffer
   private lineParamsBuf: GPUBuffer
   private timingBuf: GPUBuffer
+  private syncMeasureBuf: GPUBuffer
 
   private srcTex: GPUTexture
   private srcAspect = 4 / 3
@@ -165,35 +188,15 @@ export class Engine {
   private outTex: GPUTexture
   private linearSamp: GPUSampler
 
+  // The signal chain, as data: pre-chain (source assembly, dirty mix, loop
+  // entry), the channel block that repeats per dub generation, and the
+  // receiver side.
+  private prePasses: Pass[]
+  private loopPasses: Pass[]
+  private postPasses: Pass[]
+  private composePass: Pass
   private composePl: GPUComputePipeline
-  private encodeYuvPl: GPUComputePipeline
-  private encodeCompositePl: GPUComputePipeline
-  private chromaExtractPl: GPUComputePipeline
-  private underDownPl: GPUComputePipeline
-  private mixBPl: GPUComputePipeline
-  private fbCompositePl: GPUComputePipeline
-  private storePrevPl: GPUComputePipeline
-  private channelPl: GPUComputePipeline
-  private timebasePl: GPUComputePipeline
-  private syncPl: GPUComputePipeline
-  private lineAnalyzePl: GPUComputePipeline
-  private decodePl: GPUComputePipeline
   private presentPl: GPURenderPipeline
-
-  private composeBg: GPUBindGroup
-  private encodeYuvBg: GPUBindGroup
-  private encodeYuvBBg: GPUBindGroup
-  private mixBBg: GPUBindGroup
-  private fbCompositeBg: GPUBindGroup
-  private storePrevBg: GPUBindGroup
-  private encodeCompositeBg: GPUBindGroup
-  private chromaExtractBg: GPUBindGroup
-  private underDownBg: GPUBindGroup
-  private channelBg: GPUBindGroup
-  private timebaseBg: GPUBindGroup
-  private syncBg: GPUBindGroup
-  private lineAnalyzeBg: GPUBindGroup
-  private decodeBg: GPUBindGroup
   private presentBg: GPUBindGroup
 
   static async create(canvas: HTMLCanvasElement): Promise<Engine> {
@@ -205,8 +208,19 @@ export class Engine {
     this.gpu = gpu
     this.canvas = canvas
     const d = gpu.device
+    if (new URLSearchParams(location.search).has('prof')) this.profiler = GpuProfiler.create(d)
 
     this.paramsBuf = d.createBuffer({ size: PARAM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST })
+    // per-generation param/line-param blocks, copied over the live buffers
+    // between dub generations inside the frame's command stream
+    this.genParamsBuf = d.createBuffer({
+      size: MAX_GENS * PARAM_BYTES,
+      usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    })
+    this.genLineParamsBuf = d.createBuffer({
+      size: MAX_GENS * LINE_PARAM_BYTES,
+      usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    })
     this.filterBuf = d.createBuffer({
       size: NUM_SECTIONS * FILTER_STRIDE * 4,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
@@ -219,8 +233,12 @@ export class Engine {
     this.chromaBuf = d.createBuffer({ size: N * 4, usage: GPUBufferUsage.STORAGE })
     this.underBuf = d.createBuffer({ size: N * 4, usage: GPUBufferUsage.STORAGE })
     this.lineInfoBuf = d.createBuffer({ size: LINES * 16, usage: GPUBufferUsage.STORAGE })
-    this.lineParamsBuf = d.createBuffer({ size: LINES * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST })
+    this.lineParamsBuf = d.createBuffer({
+      size: LINE_PARAM_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    })
     this.timingBuf = d.createBuffer({ size: (LINES + 3) * 4, usage: GPUBufferUsage.STORAGE })
+    this.syncMeasureBuf = d.createBuffer({ size: LINES * 16, usage: GPUBufferUsage.STORAGE })
 
     const texDesc = (usage: number): GPUTextureDescriptor => ({
       size: [ACTIVE_WIDTH, ACTIVE_HEIGHT],
@@ -252,18 +270,19 @@ export class Engine {
         compute: { module: module(src), entryPoint: 'main' },
       })
     this.composePl = compute(composeSrc)
-    this.encodeYuvPl = compute(encodeYuvSrc)
-    this.encodeCompositePl = compute(encodeCompositeSrc)
-    this.mixBPl = compute(mixBSrc)
-    this.fbCompositePl = compute(fbCompositeSrc)
-    this.storePrevPl = compute(storePrevSrc)
-    this.chromaExtractPl = compute(chromaExtractSrc)
-    this.underDownPl = compute(underDownSrc)
-    this.channelPl = compute(channelSrc)
-    this.timebasePl = compute(timebaseSrc)
-    this.syncPl = compute(syncSrc)
-    this.lineAnalyzePl = compute(lineAnalyzeSrc)
-    this.decodePl = compute(decodeSrc)
+    const encodeYuvPl = compute(encodeYuvSrc)
+    const encodeCompositePl = compute(encodeCompositeSrc)
+    const mixBPl = compute(mixBSrc)
+    const fbCompositePl = compute(fbCompositeSrc)
+    const storePrevPl = compute(storePrevSrc)
+    const chromaExtractPl = compute(chromaExtractSrc)
+    const underDownPl = compute(underDownSrc)
+    const channelPl = compute(channelSrc)
+    const timebasePl = compute(timebaseSrc)
+    const syncMeasurePl = compute(syncMeasureSrc)
+    const syncPl = compute(syncSrc)
+    const lineAnalyzePl = compute(lineAnalyzeSrc)
+    const decodePl = compute(decodeSrc)
 
     const presentModule = module(presentSrc)
     this.presentPl = d.createRenderPipeline({
@@ -273,79 +292,160 @@ export class Engine {
       primitive: { topology: 'triangle-list' },
     })
 
-    const bg = (pl: GPUComputePipeline | GPURenderPipeline, entries: Array<GPUBindingResource>) =>
-      d.createBindGroup({
+    const pass = (
+      label: string,
+      pl: GPUComputePipeline,
+      resources: GPUBindingResource[],
+      [x, y]: readonly [number, number],
+      when?: () => boolean,
+    ): Pass => ({
+      label,
+      pl,
+      bg: d.createBindGroup({
         layout: pl.getBindGroupLayout(0),
-        entries: entries.map((resource, binding) => ({ binding, resource })),
-      })
-    this.composeBg = this.makeComposeBg()
-    this.encodeYuvBg = bg(this.encodeYuvPl, [this.inputTex.createView(), this.linearSamp, { buffer: this.yuvBuf }])
-    this.encodeYuvBBg = bg(this.encodeYuvPl, [this.srcTexB.createView(), this.linearSamp, { buffer: this.yuvBBuf }])
-    this.mixBBg = bg(this.mixBPl, [
-      { buffer: this.paramsBuf },
-      { buffer: this.filterBuf },
-      { buffer: this.yuvBBuf },
-      { buffer: this.compA },
-    ])
-    this.fbCompositeBg = bg(this.fbCompositePl, [
-      { buffer: this.paramsBuf },
-      { buffer: this.compPrev },
-      { buffer: this.compA },
-    ])
-    this.storePrevBg = bg(this.storePrevPl, [
-      { buffer: this.paramsBuf },
-      { buffer: this.compA },
-      { buffer: this.compPrev },
-    ])
-    this.encodeCompositeBg = bg(this.encodeCompositePl, [
-      { buffer: this.paramsBuf },
-      { buffer: this.filterBuf },
-      { buffer: this.yuvBuf },
-      { buffer: this.compA },
-    ])
-    this.chromaExtractBg = bg(this.chromaExtractPl, [
-      { buffer: this.paramsBuf },
-      { buffer: this.filterBuf },
-      { buffer: this.compA },
-      { buffer: this.chromaBuf },
-    ])
-    this.underDownBg = bg(this.underDownPl, [
-      { buffer: this.paramsBuf },
-      { buffer: this.filterBuf },
-      { buffer: this.chromaBuf },
-      { buffer: this.lineParamsBuf },
-      { buffer: this.underBuf },
-    ])
-    this.channelBg = bg(this.channelPl, [
-      { buffer: this.paramsBuf },
-      { buffer: this.filterBuf },
-      { buffer: this.compA },
-      { buffer: this.chromaBuf },
-      { buffer: this.underBuf },
-      { buffer: this.lineParamsBuf },
-      { buffer: this.compB },
-    ])
-    this.timebaseBg = bg(this.timebasePl, [
-      { buffer: this.lineParamsBuf },
-      { buffer: this.compB },
-      { buffer: this.compA },
-    ])
-    this.syncBg = bg(this.syncPl, [{ buffer: this.paramsBuf }, { buffer: this.compA }, { buffer: this.timingBuf }])
-    this.lineAnalyzeBg = bg(this.lineAnalyzePl, [
-      { buffer: this.paramsBuf },
-      { buffer: this.compA },
-      { buffer: this.timingBuf },
-      { buffer: this.lineInfoBuf },
-    ])
-    this.decodeBg = bg(this.decodePl, [
-      { buffer: this.paramsBuf },
-      { buffer: this.filterBuf },
-      { buffer: this.compA },
-      { buffer: this.lineInfoBuf },
-      { buffer: this.timingBuf },
-      this.outTex.createView(),
-    ])
-    this.presentBg = bg(this.presentPl, [{ buffer: this.paramsBuf }, this.outTex.createView(), this.linearSamp])
+        entries: resources.map((resource, binding) => ({ binding, resource })),
+      }),
+      x,
+      y,
+      when,
+    })
+    const perLine = [Math.ceil(SAMPLES_PER_LINE / 64), LINES] as const
+    const perPixel = [Math.ceil(ACTIVE_WIDTH / 64), ACTIVE_HEIGHT] as const
+    const perRow = [Math.ceil(LINES / 64), 1] as const
+    const c = this.controls
+    const bOn = () => this.bEnabled && (c.bGain !== 0 || c.bRing !== 0)
+
+    this.composePass = {
+      label: 'compose',
+      pl: this.composePl,
+      bg: this.makeComposeBg(),
+      x: Math.ceil(ACTIVE_WIDTH / 8),
+      y: Math.ceil(ACTIVE_HEIGHT / 8),
+    }
+    this.prePasses = [
+      this.composePass,
+      pass('encodeYuv', encodeYuvPl, [this.inputTex.createView(), this.linearSamp, { buffer: this.yuvBuf }], perPixel),
+      pass(
+        'encodeComposite',
+        encodeCompositePl,
+        [{ buffer: this.paramsBuf }, { buffer: this.filterBuf }, { buffer: this.yuvBuf }, { buffer: this.compA }],
+        perLine,
+      ),
+      pass(
+        'encodeYuvB',
+        encodeYuvPl,
+        [this.srcTexB.createView(), this.linearSamp, { buffer: this.yuvBBuf }],
+        perPixel,
+        bOn,
+      ),
+      pass(
+        'mixB',
+        mixBPl,
+        [{ buffer: this.paramsBuf }, { buffer: this.filterBuf }, { buffer: this.yuvBBuf }, { buffer: this.compA }],
+        perLine,
+        bOn,
+      ),
+      pass(
+        'fbComposite',
+        fbCompositePl,
+        [{ buffer: this.paramsBuf }, { buffer: this.compPrev }, { buffer: this.compA }],
+        perLine,
+        () => c.cfbMix !== 0,
+      ),
+    ]
+    this.loopPasses = [
+      pass(
+        'chromaExtract',
+        chromaExtractPl,
+        [{ buffer: this.paramsBuf }, { buffer: this.filterBuf }, { buffer: this.compA }, { buffer: this.chromaBuf }],
+        perLine,
+      ),
+      pass(
+        'underDown',
+        underDownPl,
+        [
+          { buffer: this.paramsBuf },
+          { buffer: this.filterBuf },
+          { buffer: this.chromaBuf },
+          { buffer: this.lineParamsBuf },
+          { buffer: this.underBuf },
+        ],
+        perLine,
+        () => c.colorUnderMix > 0,
+      ),
+      pass(
+        'channel',
+        channelPl,
+        [
+          { buffer: this.paramsBuf },
+          { buffer: this.filterBuf },
+          { buffer: this.compA },
+          { buffer: this.chromaBuf },
+          { buffer: this.underBuf },
+          { buffer: this.lineParamsBuf },
+          { buffer: this.compB },
+        ],
+        perLine,
+      ),
+      pass(
+        'timebase',
+        timebasePl,
+        [{ buffer: this.lineParamsBuf }, { buffer: this.compB }, { buffer: this.compA }],
+        perLine,
+      ),
+    ]
+    this.postPasses = [
+      pass('syncMeasure', syncMeasurePl, [{ buffer: this.compA }, { buffer: this.syncMeasureBuf }], perRow),
+      pass(
+        'sync',
+        syncPl,
+        [{ buffer: this.paramsBuf }, { buffer: this.syncMeasureBuf }, { buffer: this.timingBuf }],
+        [1, 1],
+      ),
+      pass(
+        'lineAnalyze',
+        lineAnalyzePl,
+        [{ buffer: this.paramsBuf }, { buffer: this.compA }, { buffer: this.timingBuf }, { buffer: this.lineInfoBuf }],
+        perRow,
+      ),
+      pass(
+        'decode',
+        decodePl,
+        [
+          { buffer: this.paramsBuf },
+          { buffer: this.filterBuf },
+          { buffer: this.compA },
+          { buffer: this.lineInfoBuf },
+          { buffer: this.timingBuf },
+          this.outTex.createView(),
+        ],
+        perPixel,
+      ),
+      // frame-store capture of what the decoder saw; strobe holds by skipping.
+      // Trails force an even period so every capture shares one subcarrier
+      // frame parity — a mixed-parity store scrambles hue beyond what
+      // burst-lock can correct. An idle loop (cfbMix 0) skips entirely; the
+      // store goes stale, so the first frame after the fader comes up replays
+      // the old capture.
+      pass(
+        'storePrev',
+        storePrevPl,
+        [{ buffer: this.paramsBuf }, { buffer: this.compA }, { buffer: this.compPrev }],
+        perLine,
+        () => {
+          const period = c.cfbTrail > 0 ? 2 * Math.ceil((c.cfbHold + 1) / 2) : Math.round(c.cfbHold) + 1
+          return c.cfbMix !== 0 && this.frame % period === 0
+        },
+      ),
+    ]
+    this.presentBg = d.createBindGroup({
+      layout: this.presentPl.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: this.paramsBuf } },
+        { binding: 1, resource: this.outTex.createView() },
+        { binding: 2, resource: this.linearSamp },
+      ],
+    })
 
     // reason 'destroyed' is our own destroy(); anything else is a real loss
     // (driver reset, sleep/wake, GPU hang) — stop and surface it.
@@ -439,7 +539,7 @@ export class Engine {
         format: 'rgba8unorm',
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
       })
-      this.composeBg = this.makeComposeBg()
+      this.composePass.bg = this.makeComposeBg()
     }
   }
 
@@ -449,6 +549,8 @@ export class Engine {
     cancelAnimationFrame(this.rafId)
     const bufs = [
       this.paramsBuf,
+      this.genParamsBuf,
+      this.genLineParamsBuf,
       this.filterBuf,
       this.yuvBuf,
       this.yuvBBuf,
@@ -460,6 +562,7 @@ export class Engine {
       this.lineInfoBuf,
       this.lineParamsBuf,
       this.timingBuf,
+      this.syncMeasureBuf,
     ]
     for (const b of bufs) b.destroy()
     for (const t of [this.srcTex, this.srcTexB, this.inputTex, this.outTex]) t.destroy()
@@ -493,6 +596,7 @@ export class Engine {
     const c = this.controls
     return {
       frame: this.frame,
+      gen: 0,
       ...TAPS,
       canvasW: this.canvas.width,
       canvasH: this.canvas.height,
@@ -555,7 +659,19 @@ export class Engine {
         }
       }
       this.lastTime = time
-      this.render()
+      // A synchronous throw here (e.g. getCurrentTexture during a fullscreen or
+      // visibility transition) must not kill the loop: without the catch the
+      // next rAF is never scheduled and the canvas freezes permanently while
+      // controls appear dead. Log it — early ones and a periodic sample — so
+      // the cause is visible rather than a silent hang.
+      try {
+        this.render()
+      } catch (e) {
+        this.renderErrors += 1
+        if (this.renderErrors <= 3 || this.renderErrors % 120 === 0) {
+          console.error(`render error #${this.renderErrors} (loop continues):`, e)
+        }
+      }
       this.rafId = requestAnimationFrame(this.tick)
     }
   }
@@ -603,51 +719,45 @@ export class Engine {
     })
     packParams({ ...this.uniformValues(), ...mixU }, this.paramScratch)
     d.queue.writeBuffer(this.paramsBuf, 0, this.paramScratch)
-    d.queue.writeBuffer(
-      this.lineParamsBuf,
-      0,
-      this.lineState.update(
-        {
-          tbJitterNs: c.tbJitterNs,
-          tbWowNs: c.tbWowNs,
-          underJitterDeg: c.underJitterDeg,
-          headSwitchShiftUs: c.headSwitchShiftUs,
-        },
-        this.frame,
-      ),
-    )
+    const lineControls: LineStateControls = {
+      tbJitterNs: c.tbJitterNs,
+      tbWowNs: c.tbWowNs,
+      underJitterDeg: c.underJitterDeg,
+      headSwitchShiftUs: c.headSwitchShiftUs,
+    }
+    d.queue.writeBuffer(this.lineParamsBuf, 0, this.lineState.update(lineControls, this.frame))
+    // Each extra dub generation is an independent playback pass: its own gen
+    // seed (decorrelating noise and dropouts) and a fresh time-base/phase
+    // walk, staged now and copied over the live buffers between generations.
+    const gens = Math.min(Math.max(Math.round(c.dubGens), 1), MAX_GENS)
+    const dv = new DataView(this.paramScratch)
+    for (let g = 1; g < gens; g++) {
+      dv.setUint32(GEN_OFFSET, g, true)
+      d.queue.writeBuffer(this.genParamsBuf, g * PARAM_BYTES, this.paramScratch)
+      d.queue.writeBuffer(this.genLineParamsBuf, g * LINE_PARAM_BYTES, this.lineState.update(lineControls, this.frame))
+    }
 
     const enc = d.createCommandEncoder()
-    const pass = enc.beginComputePass()
-    const run = (pl: GPUComputePipeline, bgr: GPUBindGroup, x: number, y: number) => {
-      pass.setPipeline(pl)
-      pass.setBindGroup(0, bgr)
-      pass.dispatchWorkgroups(x, y)
+    this.profiler?.begin()
+    const run = (p: Pass) => {
+      if (p.when === undefined || p.when()) {
+        const cp = enc.beginComputePass(this.profiler?.passDescriptor(p.label))
+        cp.setPipeline(p.pl)
+        cp.setBindGroup(0, p.bg)
+        cp.dispatchWorkgroups(p.x, p.y)
+        cp.end()
+      }
     }
-    run(this.composePl, this.composeBg, Math.ceil(ACTIVE_WIDTH / 8), Math.ceil(ACTIVE_HEIGHT / 8))
-    run(this.encodeYuvPl, this.encodeYuvBg, Math.ceil(ACTIVE_WIDTH / 64), ACTIVE_HEIGHT)
-    run(this.encodeCompositePl, this.encodeCompositeBg, Math.ceil(SAMPLES_PER_LINE / 64), LINES)
-    if (this.bEnabled && (c.bGain !== 0 || c.bRing !== 0)) {
-      run(this.encodeYuvPl, this.encodeYuvBBg, Math.ceil(ACTIVE_WIDTH / 64), ACTIVE_HEIGHT)
-      run(this.mixBPl, this.mixBBg, Math.ceil(SAMPLES_PER_LINE / 64), LINES)
+    for (const p of this.prePasses) run(p)
+    for (let g = 0; g < gens; g++) {
+      if (g > 0) {
+        enc.copyBufferToBuffer(this.genParamsBuf, g * PARAM_BYTES, this.paramsBuf, 0, PARAM_BYTES)
+        enc.copyBufferToBuffer(this.genLineParamsBuf, g * LINE_PARAM_BYTES, this.lineParamsBuf, 0, LINE_PARAM_BYTES)
+      }
+      for (const p of this.loopPasses) run(p)
     }
-    if (c.cfbMix !== 0) run(this.fbCompositePl, this.fbCompositeBg, Math.ceil(SAMPLES_PER_LINE / 64), LINES)
-    run(this.chromaExtractPl, this.chromaExtractBg, Math.ceil(SAMPLES_PER_LINE / 64), LINES)
-    run(this.underDownPl, this.underDownBg, Math.ceil(SAMPLES_PER_LINE / 64), LINES)
-    run(this.channelPl, this.channelBg, Math.ceil(SAMPLES_PER_LINE / 64), LINES)
-    run(this.timebasePl, this.timebaseBg, Math.ceil(SAMPLES_PER_LINE / 64), LINES)
-    run(this.syncPl, this.syncBg, 1, 1)
-    run(this.lineAnalyzePl, this.lineAnalyzeBg, LINES, 1)
-    run(this.decodePl, this.decodeBg, Math.ceil(ACTIVE_WIDTH / 64), ACTIVE_HEIGHT)
-    // frame-store capture of what the decoder saw; strobe holds by skipping.
-    // Trails force an even period so every capture shares one subcarrier
-    // frame parity — a mixed-parity store scrambles hue beyond what
-    // burst-lock can correct.
-    const period = c.cfbTrail > 0 ? 2 * Math.ceil((c.cfbHold + 1) / 2) : Math.round(c.cfbHold) + 1
-    if (this.frame % period === 0) {
-      run(this.storePrevPl, this.storePrevBg, Math.ceil(SAMPLES_PER_LINE / 64), LINES)
-    }
-    pass.end()
+    for (const p of this.postPasses) run(p)
+    this.profiler?.resolve(enc)
 
     const rp = enc.beginRenderPass({
       colorAttachments: [
@@ -669,6 +779,7 @@ export class Engine {
       d.pushErrorScope('internal')
     }
     d.queue.submit([enc.finish()])
+    this.profiler?.report()
     if (this.frame < 3) {
       const f = this.frame
       d.popErrorScope().then((e) => e && console.error(`frame ${f} internal:`, e.message))

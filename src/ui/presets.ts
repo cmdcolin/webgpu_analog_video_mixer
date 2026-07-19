@@ -19,6 +19,7 @@ export const BUILTIN_PRESETS: Record<string, Partial<Controls>> = {
     demodMHz: 0.5,
   },
   'worn tape': {
+    dubGens: 2,
     lumaMHz: 2.2,
     lumaPeak: 1.4,
     noiseIre: 7,

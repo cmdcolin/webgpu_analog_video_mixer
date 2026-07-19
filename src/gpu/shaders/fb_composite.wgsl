@@ -35,7 +35,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let n = row * SPL + s;
   let pos = f32(n) - P.cfbDelay - P.cfbLines * f32(SPL);
   let i0 = i32(floor(pos));
-  let fb = mix(prev[clampIdx(i0)], prev[clampIdx(i0 + 1)], pos - floor(pos));
+  let fb = catmull(prev[clampIdx(i0 - 1)], prev[clampIdx(i0)], prev[clampIdx(i0 + 1)], prev[clampIdx(i0 + 2)], fract(pos));
   var m = P.cfbMix;
   if (P.cfbKey != 0.0) {
     var gate = smoothstep(P.cfbKeyLevel - P.cfbKeySoft, P.cfbKeyLevel + P.cfbKeySoft, keyLuma(pos));
