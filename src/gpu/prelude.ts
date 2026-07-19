@@ -68,6 +68,8 @@ export const PARAM_DEFS: readonly (readonly [string, ParamType])[] = [
   ['headSwitchNoise', 'f32'], // 0..1
   ['polarityFlip', 'f32'], // hard signal/ground swap: negate whole composite incl. sync
   ['termination', 'f32'], // cable termination fault: <0 double-terminated (dim), >0 open (hot + ringing)
+  ['chromaPinOnly', 'f32'], // only the chroma pin fed to composite: color, no luma, no sync
+  ['connectorGlitch', 'f32'], // loose connector: intermittent contact drops bands to snow
   // feedback (camera-at-monitor)
   ['fbMix', 'f32'],
   ['fbZoom', 'f32'],

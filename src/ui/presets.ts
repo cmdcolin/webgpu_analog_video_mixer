@@ -188,6 +188,18 @@ export const PRESETS: PresetDef[] = [
     blurb: 'Two monitors on one line double-terminate it: dim, washed out, sync barely holding.',
     patch: { termination: -0.8, agc: 0.5, hHold: 0.5, noiseIre: 2 },
   },
+  {
+    name: 'chroma only',
+    group: 'Bad cables',
+    blurb: 'Only the chroma pin reaches the input — burst-locked color glowing on black, no luma to hold sync.',
+    patch: { chromaPinOnly: 1, chromaGain: 1.4 },
+  },
+  {
+    name: 'loose connector',
+    group: 'Bad cables',
+    blurb: 'Intermittent contact: bands of the picture cut to snow and flicker as the plug wiggles.',
+    patch: { connectorGlitch: 0.45, noiseIre: 2 },
+  },
 ]
 
 export function presetControls(patch: Partial<Controls>): Controls {

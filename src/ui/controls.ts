@@ -27,6 +27,8 @@ export const GROUPS: Group[] = [
     sliders: [
       { key: 'polarityFlip', label: 'hard polarity (flips sync)', min: 0, max: 1, step: 0.01, unit: '' },
       { key: 'termination', label: 'termination (-1 daisy, +1 open)', min: -1, max: 1, step: 0.01, unit: '' },
+      { key: 'chromaPinOnly', label: 'chroma-pin only (no luma/sync)', min: 0, max: 1, step: 0.01, unit: '' },
+      { key: 'connectorGlitch', label: 'loose connector', min: 0, max: 1, step: 0.01, unit: '' },
     ],
   },
   {

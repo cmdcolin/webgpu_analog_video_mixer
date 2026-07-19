@@ -66,7 +66,10 @@ fn main(
     chr = mix(chr, up, P.colorUnderMix);
   }
 
-  var out = luma + chr;
+  // C-pin-only feed: only the chroma pin reaches the composite input, so there
+  // is no luma and no sync tips — just burst-locked color that can't hold
+  // vertical or horizontal lock.
+  var out = luma * (1.0 - P.chromaPinOnly) + chr;
 
   // multipath ghost of the pre-channel signal
   if (P.ghostGain != 0.0) {
@@ -113,6 +116,18 @@ fn main(
   // head-switch disturbance band at the bottom of the picture
   if (P.headSwitchNoise > 0.0 && row >= HEAD_SWITCH_LINE && row < HEAD_SWITCH_LINE + 3u) {
     out = out + P.headSwitchNoise * 25.0 * gauss(n ^ pcg(P.frame * 3121u + row + P.gen * 4423u));
+  }
+
+  // Loose connector: intermittent contact breaks whole bands of the picture to
+  // snow and yanks the level down (taking sync with it), flickering frame to
+  // frame the way a wiggled RCA plug drops in and out.
+  if (P.connectorGlitch > 0.0) {
+    let band = row / 12u;
+    let r = rand01(pcg(P.frame * 2246822519u + band * 40503u + P.gen * 7u));
+    if (r < P.connectorGlitch * 0.5) {
+      let snow = 20.0 * gauss(n ^ pcg(P.frame * 131u + n));
+      out = mix(out, snow, 0.9) - 35.0 * P.connectorGlitch;
+    }
   }
 
   // Hard polarity flip: signal and ground fully swapped on the line. Unlike the

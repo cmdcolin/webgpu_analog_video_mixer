@@ -59,6 +59,8 @@ export const DEFAULT_CONTROLS = {
   lumaMHz: 4.2,
   polarityFlip: 0, // hard polarity flip: negate the whole line, sync included
   termination: 0, // cable termination fault (<0 double-terminated, >0 unterminated)
+  chromaPinOnly: 0, // only the chroma pin patched to composite (color, no luma/sync)
+  connectorGlitch: 0, // loose/intermittent connector
   lumaPeak: 0,
   noiseIre: 0,
   soundIre: 0,
@@ -647,6 +649,8 @@ export class Engine {
       headSwitchNoise: c.headSwitchNoise,
       polarityFlip: c.polarityFlip,
       termination: c.termination,
+      chromaPinOnly: c.chromaPinOnly,
+      connectorGlitch: c.connectorGlitch,
       fbMix: c.fbMix,
       fbZoom: c.fbZoom,
       fbRotate: (c.fbRotateDeg * Math.PI) / 180,
