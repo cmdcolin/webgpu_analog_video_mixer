@@ -8,6 +8,9 @@ import type { BindingMap, MidiManager, MidiStatus } from './ui/midi'
 import { changedKeys, loadSlots, matchPreset, PRESETS, presetControls, saveSlot } from './ui/presets'
 
 const LABEL_BY_KEY = new Map(GROUPS.flatMap((g) => g.sliders).map((s) => [s.key, s.label]))
+// Deep signal-path groups: real but rarely-touched knobs. Start collapsed so the
+// panel opens calm; presets set most of these anyway.
+const DEEP_GROUPS = new Set(['Tape / Channel', 'VHS Chroma', 'Timebase', 'Sync', 'Decoder', 'Display'])
 const SYNCABLE_SET = new Set<ControlKey>(SYNCABLE_KEYS)
 
 // Which rate controls are clock-locked, and to which SYNC_DIVISIONS index.
@@ -23,14 +26,19 @@ function omitKey(map: SyncMap, key: ControlKey): SyncMap {
   return out
 }
 
+// UI font for labels/headers/prose; mono reserved for numeric readouts where
+// digit alignment (and the technical vibe) is actually earned.
+const FONT_UI = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+const FONT_MONO = "ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace"
+
 const panelStyle: React.CSSProperties = {
   width: 300,
   overflowY: 'auto',
   padding: '10px 14px',
   background: '#16161a',
   color: '#c8c8d0',
-  fontFamily: 'monospace',
-  fontSize: 11,
+  fontFamily: FONT_UI,
+  fontSize: 12,
   flexShrink: 0,
 }
 
@@ -41,9 +49,62 @@ const btnStyle: React.CSSProperties = {
   borderRadius: 3,
   padding: '3px 8px',
   margin: '2px 3px 2px 0',
-  fontFamily: 'monospace',
+  fontFamily: FONT_UI,
+  fontSize: 12,
+  cursor: 'pointer',
+}
+
+// The Input block is deliberately styled unlike the effect sections: a calm
+// card with rows, not a collapsible header bar — "what am I feeding in" reads
+// differently from "how is it degraded".
+const inputCardStyle: React.CSSProperties = {
+  background: '#1b1b22',
+  border: '1px solid #2c2c38',
+  borderRadius: 6,
+  padding: '8px 10px 10px',
+  margin: '4px 0 6px',
+}
+
+const inputHeadStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: '#7f9fd0',
+  fontWeight: 600,
+  letterSpacing: '0.04em',
+  margin: '0 0 6px',
+}
+
+const inputRowStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  margin: '3px 0',
+}
+
+const inputTagStyle: React.CSSProperties = {
+  width: 14,
+  color: '#6a6a80',
+  fontFamily: FONT_MONO,
+  fontSize: 11,
+  fontWeight: 700,
+  flexShrink: 0,
+}
+
+const chipStyle: React.CSSProperties = {
+  flex: 1,
+  background: '#26262e',
+  color: '#c8c8d0',
+  border: '1px solid #3a3a44',
+  borderRadius: 3,
+  padding: '3px 0',
+  fontFamily: FONT_UI,
   fontSize: 11,
   cursor: 'pointer',
+}
+
+const chipActiveStyle: React.CSSProperties = {
+  borderColor: '#7fd0a0',
+  color: '#7fd0a0',
+  background: '#20302a',
 }
 
 const overlayBarStyle: React.CSSProperties = {
@@ -60,8 +121,8 @@ const overlayBtnStyle: React.CSSProperties = {
   border: '1px solid #3a3a44',
   borderRadius: 3,
   padding: '4px 9px',
-  fontFamily: 'monospace',
-  fontSize: 11,
+  fontFamily: FONT_UI,
+  fontSize: 12,
   cursor: 'pointer',
 }
 
@@ -88,16 +149,12 @@ const dialogCardStyle: React.CSSProperties = {
 }
 
 const sectionHeadStyle: React.CSSProperties = {
-  fontSize: 11,
-  margin: '10px 0 4px',
-  padding: '6px 8px',
-  color: '#b8b8d0',
-  background: '#232330',
-  border: '1px solid #3a3a4a',
-  borderRadius: 4,
-  letterSpacing: '0.05em',
+  fontSize: 12,
+  margin: '14px 0 4px',
+  padding: '3px 2px',
+  color: '#9a9ab0',
+  borderBottom: '1px solid #2a2a34',
   fontWeight: 600,
-  textTransform: 'uppercase',
   cursor: 'pointer',
   display: 'flex',
   justifyContent: 'space-between',
@@ -113,8 +170,8 @@ function GearIcon() {
   )
 }
 
-function Section(props: { title: string; children: React.ReactNode; flagged?: boolean }) {
-  const [open, setOpen] = useState(true)
+function Section(props: { title: string; children: React.ReactNode; flagged?: boolean; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(props.defaultOpen ?? true)
   const head = props.flagged ? { ...sectionHeadStyle, borderColor: '#7fd0a0', color: '#7fd0a0' } : sectionHeadStyle
   return (
     <div>
@@ -176,7 +233,7 @@ function Slider(props: {
     <label style={labelStyle}>
       <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span style={props.highlight ? { color: '#7fd0a0' } : undefined}>{props.label}</span>
-        <span style={{ color: '#7fd0a0' }}>
+        <span style={{ color: '#7fd0a0', fontFamily: FONT_MONO }}>
           {props.value.toFixed(props.step < 0.01 ? 3 : props.step < 1 ? 2 : 0)}
           {props.unit}
           {sync ? (
@@ -760,16 +817,32 @@ export function App() {
             </a>
           </div>
 
-          <Section title="Source">
-            {(['bars', 'sweep', 'file', 'webcam'] as const).map((mode) => (
-              <button
-                key={mode}
-                style={{ ...btnStyle, borderColor: sourceMode === mode ? '#7fd0a0' : '#3a3a44' }}
-                onClick={() => selectSource(mode)}
-              >
-                {mode}
-              </button>
-            ))}
+          <div style={inputCardStyle}>
+            <div style={inputHeadStyle}>Input</div>
+            <div style={inputRowStyle}>
+              <span style={inputTagStyle}>A</span>
+              {(['bars', 'sweep', 'file', 'webcam'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  style={{ ...chipStyle, ...(sourceMode === mode ? chipActiveStyle : null) }}
+                  onClick={() => selectSource(mode)}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+            <div style={inputRowStyle}>
+              <span style={inputTagStyle} title="dirty mix source">B</span>
+              {(['none', 'bars', 'sweep', 'file'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  style={{ ...chipStyle, ...(sourceBMode === mode ? chipActiveStyle : null) }}
+                  onClick={() => selectSourceB(mode)}
+                >
+                  {mode === 'none' ? 'off' : mode}
+                </button>
+              ))}
+            </div>
             <input
               ref={fileInputRef}
               type="file"
@@ -780,18 +853,6 @@ export function App() {
                 e.target.value = '' // allow re-picking the same file
               }}
             />
-          </Section>
-
-          <Section title="Source B (dirty mix)">
-            {(['none', 'bars', 'sweep', 'file'] as const).map((mode) => (
-              <button
-                key={mode}
-                style={{ ...btnStyle, borderColor: sourceBMode === mode ? '#7fd0a0' : '#3a3a44' }}
-                onClick={() => selectSourceB(mode)}
-              >
-                {mode}
-              </button>
-            ))}
             <input
               ref={fileInputBRef}
               type="file"
@@ -802,7 +863,7 @@ export function App() {
                 e.target.value = '' // allow re-picking the same file
               }}
             />
-          </Section>
+          </div>
 
           <Section title="Presets">
             {presetGroups.map((grp) => (
@@ -925,6 +986,7 @@ export function App() {
             <Section
               key={group.name}
               title={group.name}
+              defaultOpen={!DEEP_GROUPS.has(group.name)}
               flagged={hoverKeys !== null && group.sliders.some((s) => hoverKeys.has(s.key))}
             >
               {group.sliders.map((s) => (
