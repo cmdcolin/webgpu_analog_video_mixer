@@ -1,0 +1,21 @@
+// Phosphene — the big idea in five blocks. See pipeline.dot for the real passes.
+// Render: dot -Tsvg docs/pipeline-simple.dot -o docs/pipeline-simple.svg
+digraph phosphene_simple {
+  rankdir=LR;
+  bgcolor="transparent";
+  fontname="Helvetica,Arial,sans-serif";
+  node [shape=box style="rounded,filled" fontname="Helvetica,Arial,sans-serif"
+        fontsize=12 color="#33333322" fontcolor="#111111" penwidth=1 margin="0.22,0.14"];
+  edge [fontname="Helvetica,Arial,sans-serif" fontsize=10 color="#555555" fontcolor="#555555"];
+
+  src    [label="RGB source\nbars · video · webcam" fillcolor="#e7eefc"];
+  encode [label="Encode\nbuild NTSC\ncomposite waveform" fillcolor="#cfe3cb"];
+  damage [label="Channel\ndamage the signal\n(tape · RF · VHS)" fillcolor="#e9c9c9"];
+  decode [label="Decode\nimperfect TV\nreceiver → RGB" fillcolor="#d3cbeb"];
+  screen [label="Screen\nscanline beam" fillcolor="#dfe3ea"];
+
+  src -> encode -> damage -> decode -> screen;
+
+  decode -> encode [label="  composite feedback\n  (hardware mixer)" style=dashed color="#b8860b" fontcolor="#b8860b" constraint=false];
+  screen -> src    [label="  image feedback\n  (camera-at-monitor)" style=dashed color="#2f7d32" fontcolor="#2f7d32" constraint=false];
+}

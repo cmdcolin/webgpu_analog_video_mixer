@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --cache --fix",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "docs": "dot -Tsvg docs/pipeline-simple.dot -o docs/pipeline-simple.svg && dot -Tsvg docs/pipeline.dot -o docs/pipeline.svg"
   },
   "dependencies": {
     "prettier": "^3.9.5",

@@ -1,0 +1,71 @@
+// Phosphene signal path — mirrors the pass order in src/gpu/pipeline.ts
+// (prePasses -> loopPasses x dubGens -> postPasses -> present).
+// Render: dot -Tsvg docs/pipeline.dot -o docs/pipeline.svg
+digraph phosphene {
+  rankdir=TB;
+  bgcolor="transparent";
+  compound=true;
+  fontname="Helvetica,Arial,sans-serif";
+  node [shape=box style="rounded,filled" fontname="Helvetica,Arial,sans-serif"
+        fontsize=11 color="#33333322" fontcolor="#111111" penwidth=1];
+  edge [fontname="Helvetica,Arial,sans-serif" fontsize=9 color="#555555" fontcolor="#555555"];
+
+  // ---- sources -------------------------------------------------------------
+  srcA [label="Source A\nbars · sweep · video · webcam" fillcolor="#e7eefc"];
+  srcB [label="Source B\nnon-genlocked" fillcolor="#e7eefc"];
+
+  // ---- encoder -------------------------------------------------------------
+  subgraph cluster_enc {
+    label="  ①  Encoder — build the composite signal  ";
+    labeljust="l"; fontsize=12; fontcolor="#334155";
+    style="rounded,filled"; fillcolor="#f3f6fb"; color="#c9d4e6";
+    compose      [label="compose" fillcolor="#dbe9d8"];
+    encodeYuv    [label="encodeYuv\nRGB → YUV" fillcolor="#dbe9d8"];
+    encodeComp   [label="encodeComposite\nY + chroma modulated on Fsc\n→ compA" fillcolor="#cfe3cb"];
+    encodeYuvB   [label="encodeYuvB" fillcolor="#dbe9d8"];
+    mixB         [label="mixB\ndirty mix / wipe" fillcolor="#dbe9d8"];
+  }
+
+  fbComposite  [label="fbComposite\nhardware mixer loop\n+ compPrev · key · trails" fillcolor="#f6e6c8"];
+
+  // ---- channel (repeats per dub generation) --------------------------------
+  subgraph cluster_ch {
+    label="  ②  Channel — repeats × dubGens tape generations  ";
+    labeljust="l"; fontsize=12; fontcolor="#334155";
+    style="rounded,filled"; fillcolor="#fbf1f1"; color="#e6cccc";
+    chromaExtract [label="chromaExtract\nbandpass chroma out" fillcolor="#f0d9d9"];
+    underDown     [label="underDown\nVHS color-under downconvert" fillcolor="#f0d9d9"];
+    channel       [label="channel\nluma LPF · noise · dropouts · ghost\nhum · head-switch · AGC → compB" fillcolor="#e9c9c9"];
+    timebase      [label="timebase\njitter / wow resample → compA" fillcolor="#f0d9d9"];
+  }
+
+  // ---- receiver ------------------------------------------------------------
+  subgraph cluster_rx {
+    label="  ③  Receiver — decode the damaged signal  ";
+    labeljust="l"; fontsize=12; fontcolor="#334155";
+    style="rounded,filled"; fillcolor="#f3f1fb"; color="#d4ccE6";
+    syncMeasure [label="syncMeasure" fillcolor="#e0daf3"];
+    sync        [label="sync\nrecover H/V timing" fillcolor="#e0daf3"];
+    lineAnalyze [label="lineAnalyze\nper-line burst phase & lock" fillcolor="#e0daf3"];
+    decode      [label="decode\ncomb filter · chroma demod · color-kill\n→ RGB" fillcolor="#d3cbeb"];
+  }
+
+  storePrev [label="storePrev → compPrev" fillcolor="#f6e6c8"];
+  present   [label="present\nscanline beam → canvas" fillcolor="#dfe3ea"];
+
+  // ---- signal flow ---------------------------------------------------------
+  srcA -> compose;
+  compose -> encodeYuv -> encodeComp;
+  srcB -> encodeYuvB -> mixB -> encodeComp;
+  encodeComp -> fbComposite;
+  fbComposite -> chromaExtract [lhead=cluster_ch];
+  chromaExtract -> underDown -> channel -> timebase;
+  timebase -> syncMeasure [ltail=cluster_ch lhead=cluster_rx];
+  syncMeasure -> sync -> lineAnalyze -> decode;
+  decode -> present;
+  decode -> storePrev;
+
+  // ---- feedback loops ------------------------------------------------------
+  storePrev -> fbComposite [label="  next frame\n  (mixer loop)" style=dashed color="#b8860b" fontcolor="#b8860b" constraint=false];
+  present -> compose [label="  previous frame\n  camera-at-monitor" style=dashed color="#2f7d32" fontcolor="#2f7d32" constraint=false];
+}
