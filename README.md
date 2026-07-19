@@ -1,11 +1,6 @@
 # Phosphene
 
-_(phosphene — the light you see without light; here, glitch that emerges from
-the physics, not from a filter.)_
-
 Live demo - https://cmdcolin.github.io/phosphene/
-
-[![Deploy](https://github.com/cmdcolin/phosphene/actions/workflows/deploy.yml/badge.svg)](https://github.com/cmdcolin/phosphene/actions/workflows/deploy.yml)
 
 Needs a WebGPU-enabled browser
 
@@ -25,9 +20,9 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm test` runs the FIR design unit tests (DC gain, passband/stopband
-response, linear-phase symmetry, filter-bank packing). CI gates deploy on
-`pnpm lint` + `pnpm test`.
+`pnpm test` runs the FIR design unit tests (DC gain, passband/stopband response,
+linear-phase symmetry, filter-bank packing). CI gates deploy on `pnpm lint` +
+`pnpm test`.
 
 - **Sources**: SMPTE bars, multiburst sweep, video/image file, webcam; plus an
   independent source B for the dirty mixer.
