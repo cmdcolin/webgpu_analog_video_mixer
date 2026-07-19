@@ -130,6 +130,7 @@ export class Engine {
   private lastTime = 0
   private frameAcc = 0
   private frameCount = 0
+  private rafId = 0
 
   private paramsBuf: GPUBuffer
   private filterBuf: GPUBuffer
@@ -348,7 +349,7 @@ export class Engine {
     ])
     this.presentBg = bg(this.presentPl, [{ buffer: this.paramsBuf }, this.outTex.createView(), this.linearSamp])
 
-    requestAnimationFrame(this.tick)
+    this.rafId = requestAnimationFrame(this.tick)
   }
 
   setControl(key: ControlKey, value: number): void {
@@ -432,7 +433,28 @@ export class Engine {
   }
 
   destroy(): void {
+    if (!this.running) return
     this.running = false
+    cancelAnimationFrame(this.rafId)
+    const bufs = [
+      this.paramsBuf,
+      this.filterBuf,
+      this.yuvBuf,
+      this.yuvBBuf,
+      this.compA,
+      this.compB,
+      this.compPrev,
+      this.chromaBuf,
+      this.underBuf,
+      this.lineInfoBuf,
+      this.lineParamsBuf,
+      this.timingBuf,
+    ]
+    for (const b of bufs) b.destroy()
+    for (const t of [this.srcTex, this.srcTexB, this.inputTex, this.outTex]) t.destroy()
+    // Frees everything else the device owns (pipelines, bind groups) and drops
+    // the swap-chain configuration.
+    this.gpu.device.destroy()
   }
 
   // Manual frame step for the verification harness (rAF is throttled in
@@ -523,7 +545,7 @@ export class Engine {
       }
       this.lastTime = time
       this.render()
-      requestAnimationFrame(this.tick)
+      this.rafId = requestAnimationFrame(this.tick)
     }
   }
 

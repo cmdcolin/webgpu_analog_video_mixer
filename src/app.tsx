@@ -28,6 +28,29 @@ const btnStyle: React.CSSProperties = {
   cursor: 'pointer',
 }
 
+const fatalWrapStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100vw',
+  height: '100vh',
+  background: '#0a0a0c',
+  padding: 20,
+  boxSizing: 'border-box',
+}
+
+const fatalCardStyle: React.CSSProperties = {
+  maxWidth: 560,
+  background: '#16161a',
+  border: '1px solid #3a3a44',
+  borderRadius: 8,
+  padding: '24px 28px',
+  color: '#c8c8d0',
+  fontFamily: 'monospace',
+  fontSize: 13,
+  lineHeight: 1.6,
+}
+
 function Slider(props: {
   label: string
   unit: string
@@ -94,6 +117,7 @@ export function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const fileInputBRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
+  const [fatal, setFatal] = useState('')
   const [fps, setFps] = useState(0)
   const [values, setValues] = useState({ ...DEFAULT_CONTROLS })
   const [sourceMode, setSourceMode] = useState<SourceMode>('bars')
@@ -143,10 +167,12 @@ export function App() {
             if (q.has('debug')) console.log('DEBUG engine ready')
           }
         },
-        (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+        (e: unknown) => setFatal(e instanceof Error ? e.message : String(e)),
       )
       return () => {
         disposed = true
+        stopVideo()
+        stopVideoB()
         engineRef.current?.destroy()
         engineRef.current = null
       }
@@ -181,6 +207,7 @@ export function App() {
       v.pause()
       if (v.srcObject instanceof MediaStream) v.srcObject.getTracks().forEach((t) => t.stop())
       v.srcObject = null
+      if (v.src.startsWith('blob:')) URL.revokeObjectURL(v.src)
       v.removeAttribute('src')
       videoRef.current = null
     }
@@ -242,6 +269,7 @@ export function App() {
     const v = videoBRef.current
     if (v) {
       v.pause()
+      if (v.src.startsWith('blob:')) URL.revokeObjectURL(v.src)
       v.removeAttribute('src')
       videoBRef.current = null
     }
@@ -276,7 +304,25 @@ export function App() {
     }
   }
 
-  return (
+  return fatal !== '' ? (
+    <div style={fatalWrapStyle}>
+      <div style={fatalCardStyle}>
+        <h1 style={{ fontSize: 18, margin: '0 0 12px', color: '#f66' }}>WebGPU unavailable</h1>
+        <p style={{ margin: '0 0 14px' }}>{fatal}</p>
+        <p style={{ margin: '0 0 14px', color: '#8888a0' }}>
+          This app renders the entire NTSC signal path in WebGPU compute shaders, so a WebGPU-capable browser with
+          working hardware acceleration is required — there is no 2D-canvas fallback.
+        </p>
+        <p style={{ margin: 0, color: '#8888a0' }}>
+          Check support at{' '}
+          <a href="https://caniuse.com/webgpu" style={{ color: '#7fd0a0' }} target="_blank" rel="noreferrer">
+            caniuse.com/webgpu
+          </a>
+          .
+        </p>
+      </div>
+    </div>
+  ) : (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', background: '#000' }}>
       <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />

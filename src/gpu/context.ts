@@ -4,10 +4,20 @@ export interface Gpu {
   format: GPUTextureFormat
 }
 
+export class WebGpuUnavailableError extends Error {}
+
 export async function initGpu(canvas: HTMLCanvasElement): Promise<Gpu> {
-  if (!navigator.gpu) throw new Error('WebGPU not available in this browser')
+  if (!navigator.gpu) {
+    throw new WebGpuUnavailableError(
+      'This browser has no WebGPU support. Use Chrome/Edge 113+, or Firefox (stable 141+, or Nightly with dom.webgpu.enabled).',
+    )
+  }
   const adapter = await navigator.gpu.requestAdapter()
-  if (!adapter) throw new Error('No WebGPU adapter found')
+  if (!adapter) {
+    throw new WebGpuUnavailableError(
+      'WebGPU is present but no GPU adapter is available — usually a blocklisted GPU/driver or hardware acceleration disabled. In Firefox try gfx.webgpu.ignore-blocklist; in Chrome enable hardware acceleration.',
+    )
+  }
   const device = await adapter.requestDevice()
   device.addEventListener('uncapturederror', (e) => {
     console.error('WebGPU uncaptured:', (e as GPUUncapturedErrorEvent).error.message)
