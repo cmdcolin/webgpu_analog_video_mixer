@@ -406,7 +406,10 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = e.target instanceof HTMLInputElement
+      // Range sliders are HTMLInputElements too, so exclude them — otherwise a
+      // focused slider swallows f/c. Only real text entry should block shortcuts.
+      const typing =
+        e.target instanceof HTMLInputElement && e.target.type !== 'range'
       if (e.key === 'Escape') {
         setShowAdvanced(false)
         setShowHelp(false)
@@ -559,6 +562,7 @@ export function App() {
   const selectSource = (mode: SourceMode) => {
     const engine = engineRef.current
     if (engine) {
+      setError('') // a fresh source attempt clears any stale failure banner
       // For file, wait until a file is actually picked before touching state:
       // cancelling the OS dialog then leaves the current source untouched.
       if (mode === 'file') {
@@ -594,6 +598,7 @@ export function App() {
   const onFile = (file: File | undefined) => {
     const engine = engineRef.current
     if (file && engine) {
+      setError('')
       stopVideo()
       setSourceMode('file')
       if (file.type.startsWith('image/')) {
@@ -626,6 +631,7 @@ export function App() {
   const selectSourceB = (mode: SourceBMode) => {
     const engine = engineRef.current
     if (engine) {
+      setError('')
       if (mode === 'file') {
         fileInputBRef.current?.click()
       } else {
@@ -641,6 +647,7 @@ export function App() {
   const onFileB = (file: File | undefined) => {
     const engine = engineRef.current
     if (file && engine) {
+      setError('')
       stopVideoB()
       setSourceBMode('file')
       engine.setSourceBEnabled(true)
