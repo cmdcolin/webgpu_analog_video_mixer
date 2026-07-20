@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { ControlKey, Controls, Engine } from '../gpu/pipeline'
 import { createMidi } from './midi'
@@ -36,24 +36,18 @@ export function useMidi(engineRef: RefObject<Engine | null>) {
 
   // The one write path for store-origin changes (slider, preset, clock sync):
   // engine renders it, MIDI drops takeover so the knob must re-catch the value.
-  const writeControl = useCallback(
-    (key: ControlKey, v: number) => {
-      engineRef.current?.setControl(key, v)
-      midiRef.current?.setExternal(key, v)
-    },
-    [engineRef],
-  )
+  const writeControl = (key: ControlKey, v: number) => {
+    engineRef.current?.setControl(key, v)
+    midiRef.current?.setExternal(key, v)
+  }
 
-  const writeControls = useCallback(
-    (next: Controls) => {
-      engineRef.current?.applyControls(next)
-      const midi = midiRef.current
-      if (midi)
-        for (const k of Object.keys(next) as ControlKey[])
-          midi.setExternal(k, next[k])
-    },
-    [engineRef],
-  )
+  const writeControls = (next: Controls) => {
+    engineRef.current?.applyControls(next)
+    const midi = midiRef.current
+    if (midi)
+      for (const k of Object.keys(next) as ControlKey[])
+        midi.setExternal(k, next[k])
+  }
 
   return {
     status,

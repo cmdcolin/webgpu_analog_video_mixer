@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { RefObject } from 'react'
 
 // yyyymmdd-hhmmss, so saved files sort chronologically and never collide.
@@ -57,7 +57,7 @@ export function useCapture(
   const rafRef = useRef(0)
   const [recording, setRecording] = useState(false)
 
-  const grabStill = useCallback(() => {
+  const grabStill = () => {
     const canvas = canvasRef.current
     if (canvas !== null) {
       const mirror = mirrorOf(canvas)
@@ -66,9 +66,9 @@ export function useCapture(
         if (blob !== null) save(blob, fileName(name, 'png'))
       }, 'image/png')
     }
-  }, [canvasRef, name])
+  }
 
-  const toggleRecord = useCallback(() => {
+  const toggleRecord = () => {
     const active = recRef.current
     if (active === null) {
       const canvas = canvasRef.current
@@ -101,7 +101,7 @@ export function useCapture(
       recRef.current = null
       setRecording(false)
     }
-  }, [canvasRef, name])
+  }
 
   return { recording, toggleRecord, grabStill }
 }

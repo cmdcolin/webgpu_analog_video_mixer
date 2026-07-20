@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ControlKey, Engine, ModSlot } from '../gpu/pipeline'
 import type { ModSource } from '../signal/modstate'
 import { GROUPS, SLIDER_BY_KEY } from './controls'
@@ -81,16 +81,12 @@ function loadSlots(): UiSlot[] {
 export function ModSection(props: { engine: Engine | null }) {
   const [slots, setSlots] = useState<UiSlot[]>(loadSlots)
 
-  const active = useMemo(
-    () =>
-      slots.flatMap((s): ModSlot[] => {
-        const def = s.target === '' ? undefined : SLIDER_BY_KEY.get(s.target)
-        return def === undefined || s.depth === 0
-          ? []
-          : [{ ...s, target: def.key, min: def.min, max: def.max }]
-      }),
-    [slots],
-  )
+  const active = slots.flatMap((s): ModSlot[] => {
+    const def = s.target === '' ? undefined : SLIDER_BY_KEY.get(s.target)
+    return def === undefined || s.depth === 0
+      ? []
+      : [{ ...s, target: def.key, min: def.min, max: def.max }]
+  })
 
   // Push the active routings to the render loop. The engine applies them per
   // frame around its controls without writing through them, so sliders,
