@@ -3,9 +3,10 @@
 // and param overrides, so nothing here uploads files or clicks the UI.
 //
 // Usage:  node scripts/clips.mjs [outDir=clips] [base=http://localhost:5199/]
-//   (dev server + Firefox Nightly running). Convert a clip to mp4 with e.g.
-//   ffmpeg -i clips/dirty-mix.webm -c:v libx264 -crf 25 -movflags +faststart dirty-mix.mp4
-import { mkdirSync, statSync, writeFileSync } from 'node:fs'
+//   (needs dev server + Firefox Nightly + ffmpeg on PATH). Writes an mp4 per
+//   shot into outDir/ (gitignored) for review.
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import puppeteer from 'puppeteer-core'
 
 const outDir = process.argv[2] ?? 'clips'
@@ -94,7 +95,6 @@ async function record(shot) {
     }, shot.secs)
     const buf = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64')
     writeFileSync(`${outDir}/${shot.file}.webm`, buf)
-    console.log('clip', shot.file, (buf.length / 1024).toFixed(0) + 'KB')
   } finally {
     await browser.close().catch(() => {})
   }
@@ -102,9 +102,18 @@ async function record(shot) {
 
 mkdirSync(outDir, { recursive: true })
 for (const shot of SHOTS) {
+  const webm = `${outDir}/${shot.file}.webm`
   let ok = false
   for (let attempt = 0; attempt < 2 && !ok; attempt++) {
     await record(shot).catch(e => console.log('FAIL', shot.file, String(e).slice(0, 80)))
-    ok = statSync(`${outDir}/${shot.file}.webm`, { throwIfNoEntry: false })?.size > 200_000
+    ok = statSync(webm, { throwIfNoEntry: false })?.size > 200_000
+  }
+  if (ok) {
+    // prettier-ignore
+    execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', webm, '-an',
+      '-c:v', 'libx264', '-crf', '25', '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart', `${outDir}/${shot.file}.mp4`])
+    rmSync(webm)
+    console.log('clip', `${shot.file}.mp4`)
   }
 }
