@@ -11,7 +11,18 @@ clipping point instead of flattening, and trails that shift hue as they die.
   `crt_face` (transfer → saturate → gamut-fit → bloom, bloom taps included). All
   three params default to identity, so no existing preset or gallery asset moved.
   Two opt-in presets shipped under a new `Phosphor / CRT` group.
-- **Phase 2 — not started.** Handoff notes inline in the Phase 2 section below.
+- **Phase 2 — done.** `phosphorMode` (0 sRGB, 1 P22/SMPTE-C, 2 NTSC-1953 on
+  Illuminant-C white, 3 long-persistence mono green), `phosphorSkew` (default
+  0.7 reproduces the old 1.7/1.0/2.4 exponents exactly), `phosphorDecayMix`
+  (peak-hold → additive), phosphor ceiling raised to 0.995. Deviations from the
+  spec below: the matrices are applied in *linear* light (pow 2.2 around the
+  3×3 — the matrix acts on photons, not gamma-encoded drive); naive additive
+  (`outc + tail`) diverges to white on static content, so the shipped additive
+  only adds the afterglow beyond what the current drive sustains
+  (`max(tail - outc*decay, 0)`); and instead of an rgba16f persist buffer, the
+  8-bit store gets half-LSB dither, which also fixes a pre-existing bug where
+  trails below ~25/255 quantized to a fixed point and froze as permanent
+  ghosts. Presets `round tube` and `green terminal` shipped.
 - **Phase 3 — not started.**
 
 The pipeline already has the *light* behaviour (bloom, halation, glow in

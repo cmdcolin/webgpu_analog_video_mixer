@@ -25,6 +25,28 @@ fn keyLuma(pos: f32) -> f32 {
   return acc * 0.25;
 }
 
+// Bent-enhancer resonance: the bend bridges a frequency-selective network
+// across the box's feedback path, so the loop gain stays flat where the wire
+// was (sync and levels ride through untouched) and rises in the band the
+// network favors. Once crossfade x gain x (1 + boost) passes unity inside the
+// band, the loop stops echoing the picture and self-oscillates, ringing
+// standing bars and mesh over live video out of whatever content excites it.
+// Windowed-cosine bandpass, normalized to unity at center so the boost knob
+// reads directly as added in-band loop gain.
+fn loopResonance(pos: f32) -> f32 {
+  let sigma = mix(1.2, 8.0, clamp(P.cfbFilterQ, 0.0, 1.0));
+  let c0 = i32(round(pos));
+  var acc = 0.0;
+  var g = 0.0;
+  for (var k = -16; k <= 16; k = k + 1) {
+    let cs = cos(2.0 * PI * P.cfbFilterFc * f32(k));
+    let h = exp(-f32(k * k) / (2.0 * sigma * sigma)) * cs;
+    acc = acc + h * prev[clampIdx(c0 + k)];
+    g = g + h * cs;
+  }
+  return acc / max(g, 0.05);
+}
+
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
   let s = gid.x;
@@ -35,7 +57,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let n = row * SPL + s;
   let pos = f32(n) - P.cfbDelay - P.cfbLines * f32(SPL);
   let i0 = i32(floor(pos));
-  let fb = catmull(prev[clampIdx(i0 - 1)], prev[clampIdx(i0)], prev[clampIdx(i0 + 1)], prev[clampIdx(i0 + 2)], fract(pos));
+  var fb = catmull(prev[clampIdx(i0 - 1)], prev[clampIdx(i0)], prev[clampIdx(i0 + 1)], prev[clampIdx(i0 + 2)], fract(pos));
+  if (P.cfbFilterFc > 0.0 && P.cfbFilterBoost != 0.0) {
+    fb = fb + P.cfbFilterBoost * loopResonance(pos);
+  }
   var m = P.cfbMix;
   if (P.cfbKey != 0.0) {
     var gate = smoothstep(P.cfbKeyLevel - P.cfbKeySoft, P.cfbKeyLevel + P.cfbKeySoft, keyLuma(pos));

@@ -311,6 +311,38 @@ export const PRESETS: PresetDef[] = [
     patch: { connectorGlitch: 0.45, noiseIre: 2 },
   },
   {
+    name: 'bent enhancer',
+    group: 'Circuit bent',
+    blurb:
+      'Output bridged back to input through a resonant network, keyed by its own brightness: the band rings past unity and a woven oscillation eats into the picture wherever the loop finds light.',
+    patch: {
+      cfbMix: 0.55,
+      cfbGain: 1.0,
+      cfbDelayUs: 0.25,
+      cfbLines: 1,
+      cfbFilterMHz: 1.3,
+      cfbFilterQ: 0.75,
+      cfbFilterBoost: 2.0,
+      cfbKey: 0.8,
+      cfbKeyLevel: 52,
+      cfbKeySoft: 10,
+      noiseIre: 1.5,
+    },
+  },
+  {
+    name: 'rainbow storm',
+    group: 'Circuit bent',
+    blurb:
+      'The 3.58 MHz crystal pulled far off-frequency: hue shears across every line and barber-poles down the frame faster than the burst loop can chase it.',
+    patch: {
+      scDetuneKHz: 7,
+      burstLock: 0.55,
+      chromaGain: 1.2,
+      hHold: 0.25,
+      noiseIre: 2,
+    },
+  },
+  {
     name: 'neon tube',
     group: 'Phosphor / CRT',
     blurb:
@@ -323,6 +355,40 @@ export const PRESETS: PresetDef[] = [
       crtHalation: 0.5,
       crtGlow: 0.3,
       chromaGain: 1.5,
+    },
+  },
+  {
+    name: 'round tube',
+    group: 'Phosphor / CRT',
+    blurb:
+      'Early-60s colorimetry: the deep 1953 phosphors on an Illuminant-C white — green and red pull in, whites cool, bright lines fatten between visible scanlines.',
+    patch: {
+      phosphorMode: 2,
+      crtCutoff: 0.06,
+      crtGamma: 2.2,
+      crtBloom: 0.3,
+      crtHalation: 0.3,
+      crtGlow: 0.15,
+      scanBeam: 0.45,
+      scanBloom: 0.7,
+      phosphor: 0.4,
+      noiseIre: 1.5,
+    },
+  },
+  {
+    name: 'green terminal',
+    group: 'Phosphor / CRT',
+    blurb:
+      'Long-persistence mono green tube (P1 family): everything lands on one phosphor, and motion hangs as a seconds-long tail that sums like light, not paint.',
+    patch: {
+      phosphorMode: 3,
+      phosphor: 0.99,
+      phosphorDecayMix: 0.35,
+      crtCutoff: 0.08,
+      crtGamma: 2.2,
+      crtBloom: 0.5,
+      scanBeam: 0.5,
+      scanBloom: 0.5,
     },
   },
   {

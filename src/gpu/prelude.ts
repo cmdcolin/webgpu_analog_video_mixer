@@ -88,8 +88,11 @@ export const PARAM_DEFS = [
   // audio patched into the deflection, one sample per line
   ['audioBend', 'f32'], // direct horizontal displacement, samples
   ['audioLoad', 'f32'], // audio driven into the HV tank alongside beam current
+  ['audioIre', 'f32'], // audio patched straight into the composite line, IRE per unit
   ['chromaGain', 'f32'],
   ['burstLock', 'f32'], // 0..1: how much the decoder trusts the (degraded) burst
+  ['scDetunePhase', 'f32'], // bent-crystal demod LO phase error at frame start, radians (accumulated)
+  ['scDetunePerSample', 'f32'], // LO phase error growth per sample, radians
   ['killThresh', 'f32'], // IRE of burst amplitude below which color killer engages
   ['svideoBleed', 'f32'], // Y/C cross-wire: chroma bled into luma (0.5 defeats the trap)
   ['chromaCoarse', 'f32'], // chroma demod decimation factor; >1 lerps between lattice points (CUE rainbows)
@@ -136,9 +139,16 @@ export const PARAM_DEFS = [
   ['cfbKeyLevel', 'f32'], // key slice level, IRE
   ['cfbKeySoft', 'f32'], // key edge softness, IRE
   ['cfbTrail', 'f32'], // frame-store peak-hold decay (trails), 0 = plain capture
+  ['cfbFilterFc', 'f32'], // loop resonance center, cycles/sample (0 = flat loop)
+  ['cfbFilterQ', 'f32'], // loop resonance selectivity, 0 broad .. 1 narrow/ringing
+  ['cfbFilterBoost', 'f32'], // added in-band loop gain (self-oscillates past unity round trip)
   // display
   ['scanBeam', 'f32'], // finite beam-spot strength between scanlines
+  ['scanBloom', 'f32'], // beam-spot growth with beam current: bright lines fatten, gaps close in whites
   ['phosphor', 'f32'], // P22 persistence: green-channel frame-to-frame retention (R/B decay faster)
+  ['phosphorMode', 'f32'], // tube colour identity: 0 sRGB, 1 P22/SMPTE-C, 2 NTSC-1953, 3 long-persistence green
+  ['phosphorSkew', 'f32'], // R/B persistence decay exponent skew relative to G (trails die toward green)
+  ['phosphorDecayMix', 'f32'], // persistence combine: 0 peak-hold (strobe) .. 1 additive light
   ['crtSharp', 'f32'], // horizontal Catmull-Rom reconstruction blend (0 bilinear)
   ['maskAmt', 'f32'], // aperture grille strength
   ['maskPitch', 'f32'], // grille triad pitch, canvas pixels

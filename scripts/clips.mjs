@@ -2,9 +2,9 @@
 // alone (?iurl / ?iurlb / ?preset / ?set) specifies the source image(s), preset,
 // and param overrides, so nothing here uploads files or clicks the UI.
 //
-// Usage:  node scripts/clips.mjs [outDir=clips] [base=http://localhost:5199/]
+// Usage:  node scripts/clips.mjs [outDir=clips] [base=http://localhost:5199/] [shot...]
 //   (needs dev server + Firefox Nightly + ffmpeg on PATH). Writes an mp4 per
-//   shot into outDir/ (gitignored) for review.
+//   shot into outDir/ (gitignored) for review. Name shots to capture a subset.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import puppeteer from 'puppeteer-core'
@@ -100,13 +100,15 @@ async function record(shot) {
   }
 }
 
+const only = process.argv.slice(4) // optional shot-name filter
 mkdirSync(outDir, { recursive: true })
 for (const shot of SHOTS) {
+  if (only.length && !only.includes(shot.file)) continue
   const webm = `${outDir}/${shot.file}.webm`
   let ok = false
-  for (let attempt = 0; attempt < 2 && !ok; attempt++) {
+  for (let attempt = 0; attempt < 3 && !ok; attempt++) {
     await record(shot).catch(e => console.log('FAIL', shot.file, String(e).slice(0, 80)))
-    ok = statSync(webm, { throwIfNoEntry: false })?.size > 200_000
+    ok = statSync(webm, { throwIfNoEntry: false })?.size > 500_000
   }
   if (ok) {
     // prettier-ignore

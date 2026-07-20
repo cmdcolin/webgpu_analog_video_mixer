@@ -47,6 +47,49 @@ fn bendAt(y: f32) -> f32 {
   return P.bendAmt * s;
 }
 
+// Phosphor colour identity. The YUV matrix below targets sRGB primaries, but a
+// real gun drives phosphors with their own chromaticities; converting the
+// emitted light to sRGB — in linear light, since the matrix acts on photons,
+// not gamma-encoded drive — is what shifts the palette toward a given tube.
+// Mode 1 is P22/SMPTE-C, the phosphor set NTSC-era tubes converged on: a
+// gentle pull of green toward yellow and red toward orange. Mode 2 is the
+// deep 1953 NTSC primaries on an Illuminant-C white — the round-tube look,
+// desaturating green/red and cooling white, exactly what those phosphors
+// emit when reproduced on an sRGB display. Mode 3 is a long-persistence
+// mono green tube (P1 family): one phosphor, luma only.
+fn phosphorRgb(c: vec3f) -> vec3f {
+  if (P.phosphorMode > 2.5) {
+    return vec3f(0.18, 1.0, 0.33) * clamp(luma(c), 0.0, 1.0);
+  }
+  var m = mat3x3f(
+    vec3f(0.93954, 0.01777, -0.00162),
+    vec3f(0.05018, 0.96579, -0.00437),
+    vec3f(0.01028, 0.01643, 1.00599),
+  );
+  if (P.phosphorMode > 1.5) {
+    m = mat3x3f(
+      vec3f(1.37004, -0.02497, -0.02473),
+      vec3f(-0.33857, 0.84991, -0.03649),
+      vec3f(-0.07566, 0.06087, 1.06122),
+    );
+  }
+  let lin = pow(max(c, vec3f(0.0)), vec3f(2.2));
+  return pow(max(m * lin, vec3f(0.0)), vec3f(1.0 / 2.2));
+}
+
+// Bent 3.58 MHz crystal: the demod LO runs scDetune off-frequency, so its
+// phase error grows continuously through the frame. The burst AFPC measures
+// that error once per line at the burst gate and corrects what burstLock
+// trusts — so within lock a pulled crystal still shears hue *across* each
+// line (the error keeps growing between burst and pixel), and with lock
+// reduced the uncorrected ramp shows whole and hue barber-poles down the
+// frame and through time.
+fn loPhaseErr(n: u32, row: u32) -> f32 {
+  let phiPix = P.scDetunePhase + P.scDetunePerSample * f32(n);
+  let phiBurst = P.scDetunePhase + P.scDetunePerSample * f32(row * SPL + BURST_START);
+  return phiPix - P.burstLock * phiBurst;
+}
+
 // comb-filtered chroma source span for this workgroup's row; a whole
 // workgroup shares one raster row (and its sync offset), so the demod FIR
 // reads shared memory instead of 1-3 storage loads per tap
@@ -147,8 +190,9 @@ fn main(
   let acc = select(0.0, clamp(BURST_AMP / max(li.z, 0.5), 0.0, 4.0), locked);
   let g = mix(1.0, acc, P.burstLock) * P.chromaGain;
 
-  let ce = cos(e);
-  let se = sin(e);
+  let ev = loPhaseErr(n, row);
+  let ce = cos(e + ev);
+  let se = sin(e + ev);
   let ur = (us * ce + vs * se) * g;
   let vr = (-us * se + vs * ce) * g;
 
@@ -173,20 +217,39 @@ fn main(
     yn - 0.395 * un - 0.581 * vn,
     yn + 2.032 * un,
   );
-  // P22 phosphor persistence: peak-hold against the decaying previous screen.
-  // Green phosphor lingers longest, blue dies first, so trails go green-ish.
-  // Lives on outTex (not in present) so the camera-feedback loop films a
-  // persisting screen, as a real camera-at-monitor rig would.
   // Hue-preserving gamut fit instead of a per-channel clamp: saturated content
   // stays vivid at the clipping point rather than rotating hue toward whatever
   // channel didn't overflow. crt_face works in the headroom this leaves.
   var outc = gamutFit(rgb);
+  if (P.phosphorMode > 0.5) {
+    // matrix output can leave the cube (the 1953 fit has negative lobes), so
+    // fit again — same hue-preserving desaturation
+    outc = gamutFit(phosphorRgb(outc));
+  }
+  // Phosphor persistence: the screen still holds last frame's decaying light.
+  // Skewed exponents make blue die first and green linger, so trails cool
+  // toward green as they fade. Peak-hold keeps a hard-edged trail (the strobe
+  // presets); additive is how phosphor light actually sums — softer and more
+  // photographic. Lives on outTex (not in present) so the camera-feedback loop
+  // films a persisting screen, as a real camera-at-monitor rig would.
   let pi = gid.y * ACTIVE_W + gid.x;
   if (P.phosphor > 0.0) {
-    let g = min(P.phosphor, 0.98);
-    let decay = vec3f(pow(g, 1.7), g, pow(g, 2.4));
-    outc = max(outc, unpack4x8unorm(persist[pi]).rgb * decay);
+    let p = min(P.phosphor, 0.995);
+    let decay = vec3f(pow(p, 1.0 + P.phosphorSkew), p, pow(p, 1.0 + 2.0 * P.phosphorSkew));
+    let tail = unpack4x8unorm(persist[pi]).rgb * decay;
+    // Additive afterglow is only the light the phosphor still owes beyond what
+    // the current drive sustains (a steadily driven pixel owes nothing) — the
+    // subtraction keeps a static picture at unity instead of ratcheting the
+    // whole screen to white, while a departed object still leaves its full
+    // tail, summing over whatever dim content it crosses.
+    let glow = gamutFit(outc + max(tail - outc * decay, vec3f(0.0)));
+    outc = mix(max(outc, tail), glow, P.phosphorDecayMix);
   }
-  persist[pi] = pack4x8unorm(vec4f(outc, 1.0));
+  // The store is 8-bit, so a long exponential tail quantizes to a fixed point
+  // once p*v rounds back to v (everything below ~25/255 at p = 0.98) and
+  // ghosts freeze on screen instead of fading. Half-LSB dither makes the
+  // rounding unbiased, so trails decay all the way to black.
+  let dith = (rand01(pcg(pi ^ (P.frame * 668265263u))) - 0.5) / 255.0;
+  persist[pi] = pack4x8unorm(vec4f(outc + vec3f(dith), 1.0));
   textureStore(outTex, vec2i(gid.xy), vec4f(outc, 1.0));
 }

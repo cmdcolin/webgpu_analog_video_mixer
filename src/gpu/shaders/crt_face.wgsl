@@ -11,6 +11,7 @@
 @group(0) @binding(1) var srcTex: texture_2d<f32>;
 @group(0) @binding(2) var samp: sampler;
 @group(0) @binding(3) var faceTex: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(4) var<storage, read> timing: array<f32>;
 
 // P22 glass scatter is red-dominant, so bloom haze and the black-level glow
 // both warm toward amber.
@@ -44,7 +45,12 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     return;
   }
   let dim = vec2f(f32(ACTIVE_W), f32(ACTIVE_H));
-  let uv = (vec2f(gid.xy) + 0.5) / dim;
+  // Vertical deflection is analog: decode rolls the raster in whole lines
+  // (floor of the v-osc phase), and the fractional remainder is a sub-line
+  // offset of the entire scan, applied here in the deflection domain. A
+  // rolling or settling picture glides instead of stepping line by line.
+  // Identity when locked — the oscillator phase rests at exactly 0.
+  let uv = (vec2f(gid.xy) + vec2f(0.5, 0.5 + fract(timing[525u]))) / dim;
   // Beam transfer → saturate → gamut-fit is the emissive stage: put it here so
   // the feedback camera photographs phosphor light, not decoder voltages.
   var col = gamutFit(beam(textureSampleLevel(srcTex, samp, uv, 0.0).rgb));

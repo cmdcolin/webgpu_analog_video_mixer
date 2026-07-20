@@ -16,6 +16,7 @@ import { AdvancedDialog } from './ui/AdvancedDialog'
 import { InputSection } from './ui/InputSection'
 import { PresetsSection } from './ui/PresetsSection'
 import { ScenesSection } from './ui/ScenesSection'
+import { ModSection } from './ui/ModSection'
 import { MidiSection } from './ui/MidiSection'
 import { AudioSection } from './ui/AudioSection'
 import { useAudio } from './ui/useAudio'
@@ -364,6 +365,8 @@ export function App() {
         onRecall={recallScene}
         onClear={clearScene}
       />
+
+      <ModSection engine={eng.engine} />
 
       {/* MIDI only appears once enabled (from Advanced) — 99% of users never
           wire up a controller, so it stays out of the default panel. */}

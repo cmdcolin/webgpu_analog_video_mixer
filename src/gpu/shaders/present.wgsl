@@ -51,7 +51,13 @@ fn fs(in: VOut) -> @location(0) vec4f {
     col = mix(col, clamp(sharp, vec3f(0.0), vec3f(1.0)), P.crtSharp);
   }
   let fr = fract(tuv.y * f32(ACTIVE_H)) - 0.5;
-  let beam = 1.0 - P.scanBeam * (1.0 - exp(-fr * fr * 10.0));
+  // Finite beam spot between scanlines. The spot is space-charge limited, so
+  // it grows with beam current: at scanBloom > 0 bright lines fatten until the
+  // gaps close in the whites while dim picture keeps thin, separated lines —
+  // the signature that makes real scanline structure read as a beam, not an
+  // overlay.
+  let spot = 1.0 + 3.0 * P.scanBloom * luma(col);
+  let beam = 1.0 - P.scanBeam * (1.0 - exp(-fr * fr * 10.0 / spot));
   col = col * beam;
   // Aperture grille: vertical RGB phosphor stripes, gain-compensated for the
   // mean transmission loss so mids hold while bright areas clip toward white —

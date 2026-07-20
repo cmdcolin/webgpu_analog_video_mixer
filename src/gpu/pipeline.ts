@@ -26,6 +26,8 @@ import { AudioState } from '../signal/audiostate'
 import { LineState } from '../signal/linestate'
 import type { LineStateControls } from '../signal/linestate'
 import { MixState } from '../signal/mixstate'
+import { ModState } from '../signal/modstate'
+import type { ModWave } from '../signal/modstate'
 import type { Gpu } from './context'
 import { initGpu } from './context'
 import { GpuProfiler } from './profiler'
@@ -51,6 +53,11 @@ const N = SAMPLES_PER_LINE * LINES
 const LINE_PARAM_BYTES = LINES * 16
 const MAX_GENS = 4
 
+// Bent-crystal demod LO: how fast a detuned 3.58 MHz oscillator's phase error
+// grows, per composite sample.
+const loRadPerSample = (detuneKHz: number): number =>
+  (2 * Math.PI * detuneKHz * 1e3) / SAMPLE_RATE
+
 // All user-facing controls, in physical units.
 export const DEFAULT_CONTROLS = {
   // source conditioning
@@ -64,6 +71,7 @@ export const DEFAULT_CONTROLS = {
   chromaCoarse: 1, // chroma reconstruction lattice, samples (>1 = CUE rainbows)
   chromaGain: 1,
   burstLock: 1,
+  scDetuneKHz: 0, // bent 3.58 MHz crystal: demod LO pulled off-frequency
   killThresh: 2, // IRE
   svideoBleed: 0, // Y/C miswire: bleed chroma into luma (S-video pins into composite)
   combMode: 0,
@@ -82,6 +90,7 @@ export const DEFAULT_CONTROLS = {
   audioGain: 1, // input trim after auto-normalization
   audioBendUs: 0, // audio waveform straight into horizontal displacement
   audioLoad: 0, // audio driven into the HV tank (rings via hvSag/hvRing)
+  audioIre: 0, // audio patched straight into the composite line, IRE
   // Bass onset straight onto the sag *amplitude*. Distorting all the time reads
   // as a broken picture; keeping the tube near-clean and slamming it on the hit
   // is what reads as the bass punching the image.
@@ -139,6 +148,9 @@ export const DEFAULT_CONTROLS = {
   cfbKeySoft: 8,
   cfbHold: 0,
   cfbTrail: 0,
+  cfbFilterMHz: 0, // loop resonance center, 0 = flat loop
+  cfbFilterQ: 0.5, // loop resonance selectivity
+  cfbFilterBoost: 2, // added in-band loop gain once a center is set
   // dirty mixer (source B, non-genlocked)
   bGain: 0,
   bRing: 0,
@@ -168,7 +180,11 @@ export const DEFAULT_CONTROLS = {
   trackPos: 0.85,
   // display
   scanBeam: 0.3,
+  scanBloom: 0, // beam-spot growth with beam current: bright lines fatten
   phosphor: 0, // persistence: green retention per frame; red/blue decay faster
+  phosphorMode: 0, // 0 sRGB, 1 P22/SMPTE-C, 2 NTSC-1953, 3 long-persistence green
+  phosphorSkew: 0.7, // R/B decay exponent skew vs green (0.7 = 1.7/1.0/2.4)
+  phosphorDecayMix: 0, // 0 peak-hold trails (strobe), 1 additive light
   crtSharp: 0,
   maskAmt: 0,
   maskPitch: 3,
@@ -191,6 +207,16 @@ const FILTER_KEYS: ReadonlySet<string> = new Set([
   'lumaMHz',
   'lumaPeak',
 ])
+
+// A modulation routing: `source`/`rateHz` drive an oscillator in ModState;
+// depth is a fraction of the target control's slider span [min, max]. Supplied
+// by the UI (which owns the slider ranges) via setModSlots.
+export interface ModSlot extends ModWave {
+  target: ControlKey
+  depth: number
+  min: number
+  max: number
+}
 
 // One compute dispatch in the signal chain. `when` gates the dispatch on the
 // current controls; omitted means always. Bind groups are fixed except
@@ -226,6 +252,10 @@ export class Engine {
   private lineState = new LineState()
   readonly audioState = new AudioState()
   private mixState = new MixState()
+  private modState = new ModState()
+  private modSlots: ModSlot[] = []
+  // bent-crystal demod LO phase error, accumulated per frame (radians)
+  private scPhase = 0
   private paramScratch = new ArrayBuffer(PARAM_BYTES)
   private lastTime = 0
   private frameAcc = 0
@@ -570,6 +600,7 @@ export class Engine {
           { buffer: this.underBuf },
           { buffer: this.lineParamsBuf },
           { buffer: this.compB },
+          { buffer: this.audioBuf },
         ],
         perLine,
       ),
@@ -639,6 +670,7 @@ export class Engine {
           this.outTex.createView(),
           this.linearSamp,
           this.faceTex.createView(),
+          { buffer: this.timingBuf },
         ],
         perTile,
       ),
@@ -923,6 +955,8 @@ export class Engine {
       deint: c.deint,
       chromaGain: c.chromaGain,
       burstLock: c.burstLock,
+      scDetunePhase: this.scPhase,
+      scDetunePerSample: loRadPerSample(c.scDetuneKHz),
       killThresh: c.killThresh,
       svideoBleed: c.svideoBleed,
       combMode: c.combMode,
@@ -946,6 +980,7 @@ export class Engine {
         (F_H / (F_H + c.hDetuneHz + c.audioTear * this.audioState.level) - 1),
       audioBend: c.audioBendUs * 1e-6 * SAMPLE_RATE,
       audioLoad: c.audioLoad,
+      audioIre: c.audioIre,
       noiseSigma: c.noiseIre,
       ghostDelay: c.ghostDelayUs * 1e-6 * SAMPLE_RATE,
       ghostGain: c.ghostGain,
@@ -1001,11 +1036,18 @@ export class Engine {
       cfbKeyLevel: c.cfbKeyLevel,
       cfbKeySoft: c.cfbKeySoft,
       cfbTrail: c.cfbTrail,
+      cfbFilterFc: (c.cfbFilterMHz * 1e6) / SAMPLE_RATE,
+      cfbFilterQ: c.cfbFilterQ,
+      cfbFilterBoost: c.cfbFilterBoost,
       soundIre: c.soundIre,
       agc: c.agc,
       chromaCoarse: c.chromaCoarse,
       scanBeam: c.scanBeam,
+      scanBloom: c.scanBloom,
       phosphor: c.phosphor,
+      phosphorMode: c.phosphorMode,
+      phosphorSkew: c.phosphorSkew,
+      phosphorDecayMix: c.phosphorDecayMix,
       crtSharp: c.crtSharp,
       maskAmt: c.maskAmt,
       maskPitch: c.maskPitch,
@@ -1051,7 +1093,67 @@ export class Engine {
     }
   }
 
+  // Bender's modulation: LFOs / random walks / audio envelopes wiggle controls
+  // around their slider settings, the way bent hardware has oscillators and
+  // hands patched into pots. Applied by mutating `controls` for the duration
+  // of one frame and restoring after, so uniforms, filter design, and pass
+  // gating all see the modulated value while React, presets, and scenes keep
+  // the resting one (the same takeover semantics as MIDI).
+  setModSlots(slots: ModSlot[]): void {
+    this.modSlots = slots
+  }
+
+  private applyMod(): () => void {
+    let restore: () => void = () => {}
+    if (this.modSlots.length > 0) {
+      const vals = this.modState.update(
+        this.modSlots,
+        this.audioState.level,
+        this.audioState.hit,
+      )
+      const saved = this.modSlots.map(
+        s => [s.target, this.controls[s.target]] as const,
+      )
+      const touchedFilter = this.modSlots.some(s => FILTER_KEYS.has(s.target))
+      this.modSlots.forEach((s, i) => {
+        const v = this.controls[s.target] + s.depth * (s.max - s.min) * vals[i]
+        this.controls[s.target] = Math.min(s.max, Math.max(s.min, v))
+      })
+      if (touchedFilter) {
+        this.filtersDirty = true
+      }
+      restore = () => {
+        for (const [k, v] of saved) {
+          this.controls[k] = v
+        }
+        // rebuilt from the modulated value this frame; make sure the next
+        // frame (possibly with the slot removed) starts from the resting one
+        if (touchedFilter) {
+          this.filtersDirty = true
+        }
+      }
+    }
+    return restore
+  }
+
+  // Bent-crystal LO phase error keeps growing frame over frame; advance by
+  // exactly one raster of samples so the shader's per-sample ramp is
+  // continuous across the frame boundary.
+  private advanceScPhase(detuneKHz: number): void {
+    this.scPhase =
+      (this.scPhase + loRadPerSample(detuneKHz) * N) % (2 * Math.PI)
+  }
+
   private render(): void {
+    const restoreMod = this.applyMod()
+    try {
+      this.renderFrame()
+    } finally {
+      restoreMod()
+    }
+  }
+
+  private renderFrame(): void {
     const d = this.gpu.device
     if (this.frame % 30 === 0 && location.search.includes('debug')) {
       console.log(
@@ -1103,6 +1205,7 @@ export class Engine {
     }
     if (this.filtersDirty) this.rebuildFilters()
     const c = this.controls
+    this.advanceScPhase(c.scDetuneKHz)
     const mixU = this.mixState.update({
       bLineHz: c.bLineHz,
       bDetuneHz: c.bDetuneHz,

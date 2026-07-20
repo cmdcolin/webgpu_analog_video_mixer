@@ -13,6 +13,7 @@
 @group(0) @binding(4) var<storage, read> under: array<f32>;
 @group(0) @binding(5) var<storage, read> lineParams: array<vec4f>;
 @group(0) @binding(6) var<storage, read_write> outBuf: array<f32>;
+@group(0) @binding(7) var<storage, read> audio: array<f32>;
 
 fn cosUp(row: u32, s: f32) -> f32 {
   let lp = lineParams[row];
@@ -89,6 +90,14 @@ fn main(
   // 60 Hz hum: one cycle per field, slowly rolling
   if (P.humAmp > 0.0) {
     out = out + P.humAmp * sin(2.0 * PI * (f32(row) / f32(NLINES) + f32(P.frame) * 0.0037));
+  }
+
+  // Audio patched straight into the video line — the classic bend. Sampled at
+  // line rate the waveform paints one level per row, so bass rolls horizontal
+  // bands through the picture and a loud transient shoves whole lines past
+  // the sync separator's slice level, tearing lock on the beat.
+  if (P.audioIre != 0.0) {
+    out = out + P.audioIre * audio[row];
   }
 
   // 4.5 MHz FM sound carrier leaking past the trap. It is exactly 286
