@@ -4,6 +4,13 @@ import type { ControlKey, Controls, FrameStats } from '../gpu/pipeline'
 import { smpteBars, sweep } from '../sources/pattern'
 import type { SourceBMode, SourceMode } from '../sources/modes'
 import type { Fatal } from './FatalScreen'
+import { PRESETS, presetControls } from './presets'
+
+// Load an image source from a URL, for the ?iurl / ?iurlb query params.
+const loadImage = (url: string): Promise<ImageBitmap> =>
+  fetch(url)
+    .then(r => r.blob())
+    .then(createImageBitmap)
 
 declare global {
   interface Window {
@@ -247,10 +254,15 @@ export function useEngine() {
             engine.setImageSource(smpteBars())
             engine.setSourceBEnabled(false) // B is off by default; opt in via the B dropdown
             const q = new URLSearchParams(location.search)
-            const preset = q.get('set')
-            if (preset !== null) {
+            const presetName = q.get('preset')
+            if (presetName !== null) {
+              const p = PRESETS.find(x => x.name === presetName)
+              if (p) engine.applyControls(presetControls(p.patch))
+            }
+            const setParam = q.get('set')
+            if (setParam !== null) {
               const patch: Partial<Controls> = {}
-              for (const pair of preset.split(',')) {
+              for (const pair of setParam.split(',')) {
                 const [k, v] = pair.split(':')
                 const n = Number(v)
                 if (k in DEFAULT_CONTROLS && Number.isFinite(n))
@@ -281,6 +293,23 @@ export function useEngine() {
               engine.setImageSourceB(sweep())
               engine.setSourceBEnabled(true)
               setSourceBMode('sweep')
+            }
+            const onImageError = (e: unknown) =>
+              setError(`image: ${e instanceof Error ? e.message : String(e)}`)
+            const iurl = q.get('iurl')
+            if (iurl !== null) {
+              loadImage(iurl).then(bmp => {
+                engine.setImageSource(bmp, bmp.width / bmp.height)
+                setSourceMode('file')
+              }, onImageError)
+            }
+            const iurlb = q.get('iurlb')
+            if (iurlb !== null) {
+              loadImage(iurlb).then(bmp => {
+                engine.setImageSourceB(bmp)
+                engine.setSourceBEnabled(true)
+                setSourceBMode('file')
+              }, onImageError)
             }
             const vurl = q.get('vurl')
             if (vurl !== null) {

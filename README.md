@@ -20,9 +20,10 @@ feedback loops as well (a camera pointed at its own monitor, and a
 hardware-mixer loop), and you can dirty-mix in a second source. All in WebGPU
 compute shaders, in real time.
 
-![A photo dubbed to VHS inside the Phosphene app, alongside its full control panel](docs/gallery/hero.jpg)
+[![A photo dubbed to VHS inside the Phosphene app, alongside its full control panel](docs/gallery/hero.jpg)](https://cmdcolinphotos.s3.amazonaws.com/phosphene/demo.mp4)
 
-<sub>▶ **In motion:** [watch a 6-second clip](public/demo.mp4) · or open the
+<sub>▶ **In motion:** [watch the 6-second clip](https://cmdcolinphotos.s3.amazonaws.com/phosphene/demo.mp4)
+(or click the image above) · or open the
 [live demo](https://cmdcolin.github.io/phosphene/) and load your own footage.</sub>
 
 ## Gallery
@@ -55,9 +56,12 @@ linear-phase symmetry, filter-bank packing). CI gates deploy on `pnpm lint` +
 - **Presets**: built-ins + 9 scene slots (`1`–`9` recall, `shift+1`–`9` save).
 - **Performing**: `f` fullscreens the stage, and **⧉ pop out** moves the
   controls into their own window — project one screen, tweak from the other.
-- **URL params**: `?set=key:value,...`, `?vurl=…`, `?src=sweep|webcam`,
-  `?dbg=1..5`, `?prof` (per-pass GPU timings in the console, needs
-  timestamp-query support).
+- **URL params** (a link can fully specify a look): `?preset=name`,
+  `?set=key:value,...`, `?iurl=…`/`?iurlb=…` (image source A / B by URL),
+  `?vurl=…` (video), `?src=sweep|webcam`, `?srcb=bars|sweep`, `?dbg=1..5`,
+  `?prof` (per-pass GPU timings in the console, needs timestamp-query support).
+  A bundled `public/sample.jpg` makes `?iurl=/sample.jpg&preset=dirty%20mix`
+  reproducible out of the box.
 
 ## How it works
 
