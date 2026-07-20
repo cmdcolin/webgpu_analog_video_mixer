@@ -125,6 +125,12 @@ export const DEFAULT_CONTROLS = {
   pipH: 0.36,
   pipBorder: 0.006,
   pipSoft: 0.004,
+  pipKey: 0,
+  pipKeyLevel: 0.2,
+  pipKeySoft: 0.08,
+  // VHS tracking error
+  trackAmt: 0,
+  trackPos: 0.85,
   // display
   scanBeam: 0.3,
 }
@@ -849,6 +855,11 @@ export class Engine {
       pipH: c.pipH,
       pipBorder: c.pipBorder,
       pipSoft: c.pipSoft,
+      pipKey: c.pipKey,
+      pipKeyLevel: c.pipKeyLevel,
+      pipKeySoft: c.pipKeySoft,
+      trackAmt: c.trackAmt,
+      trackPos: c.trackPos,
       cfbMix: c.cfbMix,
       cfbGain: c.cfbGain,
       cfbDelay: c.cfbDelayUs * 1e-6 * SAMPLE_RATE,
@@ -962,6 +973,8 @@ export class Engine {
       tbWowNs: c.tbWowNs,
       underJitterDeg: c.underJitterDeg,
       headSwitchShiftUs: c.headSwitchShiftUs,
+      trackAmt: c.trackAmt,
+      trackPos: c.trackPos,
     }
     d.queue.writeBuffer(
       this.lineParamsBuf,

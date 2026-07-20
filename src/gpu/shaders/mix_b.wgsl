@@ -133,8 +133,20 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       var bp = IRE_BLACK + VIDEO_RANGE * (yuvB[bnp].x + uf * sc.x + vf * sc.y) * P.bVidGain;
       bp = mix(bp, 107.5 - bp, P.bInv);
       // matte border: a solid frame just inside the window edge
-      let inset = select(bp, IRE_BLACK + VIDEO_RANGE * 0.9, dIn < P.pipBorder);
-      comp[n] = mix(comp[n], inset, key * P.pipMix);
+      let isBorder = dIn < P.pipBorder;
+      let inset = select(bp, IRE_BLACK + VIDEO_RANGE * 0.9, isBorder);
+      // luma key: drop the inset where B's own luma crosses the slice, so a
+      // dark/bright matte in B lets the program show through (the border stays
+      // solid). Negative key inverts which side is kept.
+      var kg = 1.0;
+      if (P.pipKey != 0.0) {
+        var g = smoothstep(P.pipKeyLevel - P.pipKeySoft, P.pipKeyLevel + P.pipKeySoft, yuvB[bnp].x);
+        if (P.pipKey < 0.0) {
+          g = 1.0 - g;
+        }
+        kg = select(mix(1.0, g, abs(P.pipKey)), 1.0, isBorder);
+      }
+      comp[n] = mix(comp[n], inset, key * P.pipMix * kg);
     }
   }
 }

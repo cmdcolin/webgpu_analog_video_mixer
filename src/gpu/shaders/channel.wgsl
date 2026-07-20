@@ -118,6 +118,21 @@ fn main(
     out = out + P.headSwitchNoise * 25.0 * gauss(n ^ pcg(P.frame * 3121u + row + P.gen * 4423u));
   }
 
+  // VHS tracking error: a mistracked head can't read a band of lines, which
+  // collapse to demodulated snow. Strongest at the band center, tapering out.
+  // The horizontal tear/bend of these lines is added by the time-base offset
+  // (linestate) so it flows through the resampler like the rest.
+  if (P.trackAmt > 0.0) {
+    let center = P.trackPos * f32(NLINES);
+    let half = 3.0 + 18.0 * P.trackAmt;
+    let d = abs(f32(row) - center);
+    if (d < half) {
+      let edge = 1.0 - d / half;
+      let snow = 45.0 * gauss(n ^ pcg(P.frame * 6151u + row + P.gen * 97u));
+      out = mix(out, snow, clamp(P.trackAmt * edge * 1.3, 0.0, 0.95));
+    }
+  }
+
   // Loose connector: intermittent contact breaks whole bands of the picture to
   // snow and yanks the level down (taking sync with it), flickering frame to
   // frame the way a wiggled RCA plug drops in and out.

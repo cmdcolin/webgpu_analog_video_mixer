@@ -21,6 +21,8 @@ export interface LineStateControls {
   tbWowNs: number // wow: slow sinusoidal wander amplitude
   underJitterDeg: number // color-under phase wander per line
   headSwitchShiftUs: number // horizontal shift after the head switch point
+  trackAmt: number // VHS tracking error severity
+  trackPos: number // tracking band vertical position, 0..1
 }
 
 export class LineState {
@@ -42,6 +44,18 @@ export class LineState {
       const headSwitched = row >= HEAD_SWITCH_LINE
       const hs = headSwitched ? usToSamples(c.headSwitchShiftUs) : 0
 
+      // tracking band tear: lines near the mistracked band hook sideways,
+      // strongest at the band center, with a little per-line jitter
+      const trackCenter = c.trackPos * LINES
+      const trackHalf = 3 + 18 * c.trackAmt
+      const trackDist = Math.abs(row - trackCenter)
+      const track =
+        c.trackAmt > 0 && trackDist < trackHalf
+          ? usToSamples(6 * c.trackAmt) *
+            (1 - trackDist / trackHalf) *
+            (0.6 + 0.8 * Math.random())
+          : 0
+
       // color-under playback carrier phase for this line: exact base phase
       // (computed in f64 — f32 cannot hold it) plus accumulated jitter walk
       const globalSample = (frame * LINES + row) * SAMPLES_PER_LINE
@@ -51,7 +65,7 @@ export class LineState {
       this.underWalk *= 0.99
 
       const o = row * 4
-      this.data[o] = this.flutter + wow + hs
+      this.data[o] = this.flutter + wow + hs + track
       this.data[o + 1] = base * 2 * Math.PI
       this.data[o + 2] = this.underWalk + (headSwitched ? 0.9 : 0)
       this.data[o + 3] = Math.random()

@@ -63,6 +63,13 @@ export const PARAM_DEFS = [
   ['pipH', 'f32'], // window height, active-picture UV
   ['pipBorder', 'f32'], // matte border thickness, active-picture UV
   ['pipSoft', 'f32'], // window edge softness, active-picture UV
+  ['pipKey', 'f32'], // inset luma key amount, negative inverts polarity
+  ['pipKeyLevel', 'f32'], // inset luma key slice, 0..1
+  ['pipKeySoft', 'f32'], // inset luma key edge softness, luma units
+  // VHS tracking error: a mistracked head produces a noise band that tears and
+  // bends the picture at an adjustable height (the "tracking" knob).
+  ['trackAmt', 'f32'], // severity, 0 locked
+  ['trackPos', 'f32'], // band vertical position, 0..1
   // decoder
   ['combMode', 'f32'], // 0 chroma trap, 1 two-line comb, 2 three-line comb
   ['hHold', 'f32'], // sync PLL gain (horizontal hold)
