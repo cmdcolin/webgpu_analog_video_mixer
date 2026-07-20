@@ -716,6 +716,7 @@ export class Engine {
     void this.gpu.device.lost.then(info => {
       if (this.running && info.reason !== 'destroyed') {
         this.running = false
+        console.error(`WebGPU device lost (${info.reason}): ${info.message}`)
         this.onDeviceLost(info.message)
       }
     })
@@ -1060,40 +1061,51 @@ export class Engine {
   }
 
   private tick = (time: number): void => {
+    if (!this.running) return
+    // Re-arm the next frame FIRST, before any work. A synchronous throw below
+    // (e.g. getCurrentTexture during a fullscreen/visibility transition, or a
+    // React setState in onStats) then can't leave the loop un-scheduled — the
+    // classic "canvas froze, controls look dead" hang after exiting fullscreen.
+    this.rafId = requestAnimationFrame(this.tick)
+    if (this.lastTime > 0) {
+      const dt = time - this.lastTime
+      this.frameAcc += dt
+      this.frameWorst = Math.max(this.frameWorst, dt)
+      this.frameCount += 1
+      if (this.frameCount === STATS_WINDOW) {
+        this.onStats({
+          fps: 1000 / (this.frameAcc / STATS_WINDOW),
+          worstMs: this.frameWorst,
+        })
+        this.frameAcc = 0
+        this.frameCount = 0
+        this.frameWorst = 0
+      }
+    }
+    this.lastTime = time
+    try {
+      this.render()
+    } catch (e) {
+      this.renderErrors += 1
+      if (this.renderErrors <= 3 || this.renderErrors % 120 === 0) {
+        console.error(`render error #${this.renderErrors} (loop continues):`, e)
+      }
+    }
+  }
+
+  // Re-arm the loop after a transition (fullscreen exit, tab re-shown) that can
+  // leave the browser having stopped delivering rAF callbacks. Idempotent: it
+  // cancels any pending frame first, so calling it when the loop is healthy is a
+  // no-op rather than a double-schedule.
+  kick(): void {
     if (this.running) {
-      if (this.lastTime > 0) {
-        const dt = time - this.lastTime
-        this.frameAcc += dt
-        this.frameWorst = Math.max(this.frameWorst, dt)
-        this.frameCount += 1
-        if (this.frameCount === STATS_WINDOW) {
-          this.onStats({
-            fps: 1000 / (this.frameAcc / STATS_WINDOW),
-            worstMs: this.frameWorst,
-          })
-          this.frameAcc = 0
-          this.frameCount = 0
-          this.frameWorst = 0
-        }
-      }
-      this.lastTime = time
-      // A synchronous throw here (e.g. getCurrentTexture during a fullscreen or
-      // visibility transition) must not kill the loop: without the catch the
-      // next rAF is never scheduled and the canvas freezes permanently while
-      // controls appear dead. Log it — early ones and a periodic sample — so
-      // the cause is visible rather than a silent hang.
-      try {
-        this.render()
-      } catch (e) {
-        this.renderErrors += 1
-        if (this.renderErrors <= 3 || this.renderErrors % 120 === 0) {
-          console.error(
-            `render error #${this.renderErrors} (loop continues):`,
-            e,
-          )
-        }
-      }
+      const stalledMs = this.lastTime > 0 ? performance.now() - this.lastTime : 0
+      cancelAnimationFrame(this.rafId)
       this.rafId = requestAnimationFrame(this.tick)
+      if (stalledMs > 200)
+        console.warn(
+          `render loop kicked after ${stalledMs.toFixed(0)}ms stall`,
+        )
     }
   }
 
