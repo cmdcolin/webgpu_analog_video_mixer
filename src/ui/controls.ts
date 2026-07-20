@@ -924,3 +924,10 @@ export const GROUPS: Group[] = [
     ],
   },
 ]
+
+// Span/step lookup for the code that maps external values onto controls —
+// MIDI CC scaling, modulation depth, mutation — none of which have the group
+// walk in hand.
+export const SLIDER_BY_KEY = new Map<ControlKey, SliderDef>(
+  GROUPS.flatMap(g => g.sliders).map(s => [s.key, s]),
+)

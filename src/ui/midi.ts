@@ -1,5 +1,5 @@
 import type { ControlKey } from '../gpu/pipeline'
-import { GROUPS } from './controls'
+import { SLIDER_BY_KEY } from './controls'
 import type { SliderDef } from './controls'
 
 // One CC source = a (channel, controller) pair. Channel is kept so two knobs
@@ -13,10 +13,6 @@ export type BindingMap = Partial<Record<ControlKey, MidiBinding>>
 
 export type MidiStatus =
   'unsupported' | 'idle' | 'requesting' | 'ready' | 'denied'
-
-const SLIDER_BY_KEY = new Map<ControlKey, SliderDef>(
-  GROUPS.flatMap(g => g.sliders).map(s => [s.key, s]),
-)
 
 const STORE_KEY = 'video_feedback_midi'
 
