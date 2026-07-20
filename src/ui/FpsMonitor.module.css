@@ -18,3 +18,30 @@
   border: 1px solid #3a3a44;
   border-radius: 3px;
 }
+.dismiss {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.dismiss:hover {
+  color: #aaa;
+}
+.reopen {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.reopen:hover {
+  opacity: 1;
+}

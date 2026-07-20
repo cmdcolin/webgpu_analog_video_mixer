@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FrameStats } from '../gpu/pipeline'
 import styles from './FpsMonitor.module.css'
 
@@ -14,6 +14,10 @@ const OK_FPS = 30
 function barColor(fps: number): string {
   return fps >= 55 ? '#4a4' : fps >= 28 ? '#cc4' : '#e55'
 }
+
+// Persisted across reloads so a dismissal sticks.
+const HIDDEN_STORE = 'phosphene_fps_hidden'
+const loadHidden = (): boolean => localStorage.getItem(HIDDEN_STORE) === '1'
 
 function draw(canvas: HTMLCanvasElement, history: number[]) {
   const dpr = Math.min(window.devicePixelRatio, 2)
@@ -46,9 +50,14 @@ function draw(canvas: HTMLCanvasElement, history: number[]) {
 }
 
 export function FpsMonitor(props: { stats: FrameStats; res: string }) {
-  const { fps, worstMs } = props.stats
+  const { fps } = props.stats
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const historyRef = useRef<number[]>([])
+  const [hidden, setHidden] = useState(loadHidden)
+  const setPersistedHidden = (next: boolean) => {
+    setHidden(next)
+    localStorage.setItem(HIDDEN_STORE, next ? '1' : '0')
+  }
 
   // Each new stats object is one window sample; append and redraw the histogram.
   useEffect(() => {
@@ -57,12 +66,26 @@ export function FpsMonitor(props: { stats: FrameStats; res: string }) {
     if (canvas !== null) draw(canvas, historyRef.current)
   }, [fps])
 
-  return (
+  return hidden ? (
+    <button
+      className={styles.reopen}
+      style={{ background: barColor(fps) }}
+      onClick={() => setPersistedHidden(false)}
+      title={`show fps monitor (${fps.toFixed(0)} fps)`}
+    />
+  ) : (
     <div className={styles.monitor}>
       <canvas ref={canvasRef} className={styles.graph} />
       <span className={styles.readout}>
-        {fps.toFixed(0)} fps · worst {worstMs.toFixed(0)}ms · {props.res}
+        {fps.toFixed(0)} fps · {props.res}
       </span>
+      <button
+        className={styles.dismiss}
+        onClick={() => setPersistedHidden(true)}
+        title="hide fps monitor"
+      >
+        ×
+      </button>
     </div>
   )
 }

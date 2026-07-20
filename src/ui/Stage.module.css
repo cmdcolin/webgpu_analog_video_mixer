@@ -38,6 +38,23 @@
 .overlayBtn:hover {
   background: rgba(40, 40, 48, 0.85);
 }
+.reopenBar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(22, 22, 26, 0.6);
+  color: #c8c8d0;
+  border: 1px solid #3a3a44;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.reopenBar:hover {
+  opacity: 1;
+  background: rgba(40, 40, 48, 0.85);
+}
 /* recording: steady red so it reads at a glance on a projector */
 .recording {
   color: #ff6060;
