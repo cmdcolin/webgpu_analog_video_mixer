@@ -2,6 +2,7 @@ import type { RefObject } from 'react'
 import type { FrameStats } from '../gpu/pipeline'
 import { GearIcon } from './icons'
 import { FpsMonitor } from './FpsMonitor'
+import { cx } from './cx'
 import styles from './Stage.module.css'
 
 export function Stage(props: {
@@ -11,6 +12,9 @@ export function Stage(props: {
   res: string
   fullscreen: boolean
   poppedOut: boolean
+  recording: boolean
+  onToggleRecord: () => void
+  onGrabStill: () => void
   onToggleFullscreen: () => void
   onPopout: () => void
   onShowHelp: () => void
@@ -21,6 +25,24 @@ export function Stage(props: {
       <canvas ref={props.canvasRef} className={styles.canvas} />
       {props.error !== '' && <div className={styles.error}>{props.error}</div>}
       <div className={styles.overlayBar}>
+        <button
+          className={styles.overlayBtn}
+          onClick={props.onGrabStill}
+          title="save a PNG still (s)"
+        >
+          ◍ still
+        </button>
+        <button
+          className={cx(styles.overlayBtn, props.recording && styles.recording)}
+          onClick={props.onToggleRecord}
+          title={
+            props.recording
+              ? 'stop recording and save the .webm clip (r)'
+              : 'record the stage to a .webm clip (r)'
+          }
+        >
+          {props.recording ? '■ stop' : '● rec'}
+        </button>
         <button
           className={styles.overlayBtn}
           style={{ fontWeight: 700 }}

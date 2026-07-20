@@ -38,3 +38,14 @@
 .overlayBtn:hover {
   background: rgba(40, 40, 48, 0.85);
 }
+/* recording: steady red so it reads at a glance on a projector */
+.recording {
+  color: #ff6060;
+  border-color: #a05050;
+  animation: recPulse 1.2s ease-in-out infinite;
+}
+@keyframes recPulse {
+  50% {
+    opacity: 0.55;
+  }
+}

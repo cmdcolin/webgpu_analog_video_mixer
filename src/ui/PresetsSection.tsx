@@ -25,6 +25,9 @@ export function PresetsSection(props: {
   onEndCompare: () => void
   onCopyLink: () => void
   copied: boolean
+  onMutate: () => void
+  canUndo: boolean
+  onUndo: () => void
 }) {
   const active = matchPreset(props.controls)
   const presetCaption = active
@@ -74,6 +77,21 @@ export function PresetsSection(props: {
         onClick={props.onCopyLink}
       >
         {props.copied ? 'copied!' : 'copy link'}
+      </button>
+      <button
+        className={styles.btn}
+        onClick={props.onMutate}
+        title="jitter every control around the current look, for a related variation (also happy accidents)"
+      >
+        mutate
+      </button>
+      <button
+        className={cx(styles.btn, !props.canUndo && styles.slotEmpty)}
+        onClick={props.onUndo}
+        disabled={!props.canUndo}
+        title="restore the look from before the last preset, scene, or mutate"
+      >
+        undo
       </button>
       <div className={styles.hint}>
         “clean” resets everything · hold C to compare · f for fullscreen

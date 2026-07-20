@@ -39,7 +39,10 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
             <b>C</b> (hold) compare against the clean signal
           </li>
           <li>
-            <b>F</b> fullscreen · <b>Esc</b> close dialogs
+            <b>R</b> record a clip · <b>S</b> save a still (both download)
+          </li>
+          <li>
+            <b>F</b> fullscreen · <b>Esc</b> close dialogs · <b>Ctrl/⌘+Z</b> undo
           </li>
           <li>
             <b>1–9</b> recall a scene · <b>shift+1–9</b> save the current look

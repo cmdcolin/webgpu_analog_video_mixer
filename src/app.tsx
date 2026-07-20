@@ -1,10 +1,12 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { DEFAULT_CONTROLS } from './gpu/pipeline'
 import type { ControlKey, Controls } from './gpu/pipeline'
 import { GROUPS, type Group } from './ui/controls'
 import { SYNCABLE_KEYS, SYNC_DIVISIONS, omit, syncedValue } from './ui/midi'
-import { presetControls } from './ui/presets'
+import { matchPreset, presetControls } from './ui/presets'
+import { mutate } from './ui/mutate'
+import { useCapture } from './ui/useCapture'
 import { cx } from './ui/cx'
 import { Section } from './ui/Section'
 import { Slider } from './ui/Slider'
@@ -31,6 +33,8 @@ const getDefaultControls = (): Controls => DEFAULT_CONTROLS
 
 const MAIN_GROUPS = GROUPS.filter(g => g.ab !== true && g.audio !== true)
 const AUDIO_GROUP = GROUPS.find(g => g.audio === true)
+// Every control that has a slider — the full set `mutate` jitters.
+const ALL_SLIDERS = GROUPS.flatMap(g => g.sliders)
 const SYNCABLE_SET = new Set<ControlKey>(SYNCABLE_KEYS)
 
 // Which rate controls are clock-locked, and to which SYNC_DIVISIONS index.
@@ -95,6 +99,9 @@ export function App() {
   const [comparing, setComparing] = useState(false)
   const [filter, setFilter] = useState('')
   const [scenes, setScenes] = useState<SceneMap>(loadScenes)
+  // Single-level undo: the look from just before the last destructive apply
+  // (preset, scene recall, or mutate), so a misclick is one keypress back.
+  const [undoSnapshot, setUndoSnapshot] = useState<Controls | null>(null)
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
@@ -104,9 +111,31 @@ export function App() {
     }
   }
 
+  // Capture the live look before overwriting it, so `undo` can restore it.
+  const snapshotForUndo = () => {
+    const cur = engineRef.current?.getControls()
+    if (cur !== undefined) setUndoSnapshot(cur)
+  }
+  const undo = () => {
+    if (undoSnapshot !== null) {
+      writeControls(undoSnapshot)
+      setUndoSnapshot(null)
+    }
+  }
+
   const applyPreset = (name: string, patch: Partial<Controls>) => {
+    snapshotForUndo()
     writeControls(presetControls(patch))
     setLastPreset(name)
+  }
+
+  const mutateLook = () => {
+    const cur = engineRef.current?.getControls()
+    if (cur !== undefined) {
+      setUndoSnapshot(cur)
+      writeControls(mutate(cur, ALL_SLIDERS))
+      setLastPreset(null)
+    }
   }
 
   const persistScenes = (next: SceneMap) => {
@@ -119,7 +148,10 @@ export function App() {
   }
   const recallScene = (n: number) => {
     const scene = loadScenes()[n]
-    if (scene !== undefined) writeControls(presetControls(scene))
+    if (scene !== undefined) {
+      snapshotForUndo()
+      writeControls(presetControls(scene))
+    }
   }
   const clearScene = (n: number) => {
     persistScenes(
@@ -140,18 +172,39 @@ export function App() {
     setComparing(false)
   }
 
+  // Name captures after the active preset (or the last one, edited), so a saved
+  // file says what it is. matchPreset falls through to a plain label otherwise.
+  const activePreset = matchPreset(controls)
+  const captureName = activePreset ? activePreset.name : (lastPreset ?? 'edit')
+  const capture = useCapture(eng.canvasRef, captureName)
+
+  // The keydown listener is mount-anchored (below) and must not re-subscribe on
+  // every render, so it reads the latest action closures through this ref.
+  const actionsRef = useRef({ capture, undo, undoSnapshot })
+  actionsRef.current = { capture, undo, undoSnapshot }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = isTextEntry(e.target)
+      const { capture, undo, undoSnapshot } = actionsRef.current
       if (e.key === 'Escape') {
         setShowAdvanced(false)
         setShowHelp(false)
         setFilter('')
         disarm()
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (undoSnapshot !== null) {
+          e.preventDefault()
+          undo()
+        }
       } else if (!typing && e.key === 'f') {
         toggleFullscreen()
       } else if (!typing && e.key === 'c' && !e.repeat) {
         startCompare()
+      } else if (!typing && e.key === 'r' && !e.repeat) {
+        capture.toggleRecord()
+      } else if (!typing && e.key === 's' && !e.repeat) {
+        capture.grabStill()
       } else if (!typing) {
         const m = /^(?:Digit|Numpad)([1-9])$/.exec(e.code)
         if (m !== null && !e.repeat) {
@@ -181,7 +234,19 @@ export function App() {
   }, [popout])
 
   useEffect(() => {
-    const onFs = () => setFullscreen(document.fullscreenElement !== null)
+    // Exiting fullscreen (and re-showing a hidden tab) can leave the browser
+    // having stopped delivering rAF callbacks; re-arm the loop so the canvas
+    // doesn't stay frozen. The engine's kick() is a no-op when the loop is
+    // already healthy, and logs when it actually had to restart a stalled loop.
+    const onFs = () => {
+      const fs = document.fullscreenElement !== null
+      setFullscreen(fs)
+      console.log(`fullscreenchange -> ${fs ? 'entered' : 'exited'}`)
+      engineRef.current?.kick()
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') engineRef.current?.kick()
+    }
     // Restored from bfcache: the GPUDevice captured before navigating away is
     // dead, so the canvas would render frozen. Reload to build a fresh engine.
     const onPageShow = (e: PageTransitionEvent) => {
@@ -189,11 +254,13 @@ export function App() {
     }
     window.addEventListener('pageshow', onPageShow)
     document.addEventListener('fullscreenchange', onFs)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       window.removeEventListener('pageshow', onPageShow)
       document.removeEventListener('fullscreenchange', onFs)
+      document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [])
+  }, [engineRef])
 
   const bindLabel = (key: ControlKey): string | null => {
     const b = midiBindings[key]
@@ -356,6 +423,9 @@ export function App() {
         onEndCompare={endCompare}
         onCopyLink={copyLink}
         copied={copied}
+        onMutate={mutateLook}
+        canUndo={undoSnapshot !== null}
+        onUndo={undo}
       />
 
       <ScenesSection
@@ -414,6 +484,9 @@ export function App() {
         res={eng.res}
         fullscreen={fullscreen}
         poppedOut={popout !== null}
+        recording={capture.recording}
+        onToggleRecord={capture.toggleRecord}
+        onGrabStill={capture.grabStill}
         onToggleFullscreen={toggleFullscreen}
         onPopout={openPopout}
         onShowHelp={() => setShowHelp(true)}
