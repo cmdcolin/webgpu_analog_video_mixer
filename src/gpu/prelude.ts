@@ -121,6 +121,9 @@ export const PARAM_DEFS = [
   ['fbKnee', 'f32'], // sensor s-curve amount (bloom + highlight compression)
   // CRT faceplate: the emissive screen the camera photographs (and the display
   // shows). Sits between the decoded signal and the camera/lens model above.
+  ['crtCutoff', 'f32'], // beam cutoff: drive below the knee emits no light (true black background)
+  ['crtGamma', 'f32'], // gun luminance response, luminance ~ drive^gamma (expands highlights, deepens shadows)
+  ['crtSat', 'f32'], // saturation around luma, applied after the beam transfer
   ['crtBloom', 'f32'], // highlight bloom spread from bright phosphor cores
   ['crtHalation', 'f32'], // wide warm glass-scatter halo around highlights
   ['crtGlow', 'f32'], // phosphor black-level glow / faceplate haze
@@ -240,6 +243,31 @@ fn gauss(seed: u32) -> f32 {
   let a = max(rand01(seed), 1e-7);
   let b = rand01(seed ^ 0x9E3779B9u);
   return sqrt(-2.0 * log(a)) * cos(2.0 * PI * b);
+}
+
+fn luma(c: vec3f) -> f32 {
+  return dot(c, vec3f(0.299, 0.587, 0.114));
+}
+
+// Gamut fit by desaturation. A hard per-channel clamp on an out-of-gamut colour
+// only clips the overflowing channel, which rotates hue toward the remaining
+// primaries — saturated content goes duller and wrong at the clipping point. This
+// instead pulls the colour toward its own (clamped) luma along the chroma axis
+// just far enough to re-enter the cube, so hue is preserved and a real tube's
+// saturated highlights stay electric. In-gamut colours are returned unchanged.
+fn gamutFit(c: vec3f) -> vec3f {
+  let l = clamp(luma(c), 0.0, 1.0);
+  let d = c - vec3f(luma(c));
+  var s = 1.0;
+  for (var i = 0; i < 3; i = i + 1) {
+    let di = d[i];
+    if (di > 1e-5) {
+      s = min(s, (1.0 - l) / di);
+    } else if (di < -1e-5) {
+      s = min(s, -l / di);
+    }
+  }
+  return clamp(vec3f(l) + max(s, 0.0) * d, vec3f(0.0), vec3f(1.0));
 }
 
 // Catmull-Rom fractional-delay read. Linear interpolation is -6 dB at fsc for

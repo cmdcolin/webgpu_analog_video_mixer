@@ -177,7 +177,10 @@ fn main(
   // Green phosphor lingers longest, blue dies first, so trails go green-ish.
   // Lives on outTex (not in present) so the camera-feedback loop films a
   // persisting screen, as a real camera-at-monitor rig would.
-  var outc = clamp(rgb, vec3f(0.0), vec3f(1.0));
+  // Hue-preserving gamut fit instead of a per-channel clamp: saturated content
+  // stays vivid at the clipping point rather than rotating hue toward whatever
+  // channel didn't overflow. crt_face works in the headroom this leaves.
+  var outc = gamutFit(rgb);
   let pi = gid.y * ACTIVE_W + gid.x;
   if (P.phosphor > 0.0) {
     let g = min(P.phosphor, 0.98);

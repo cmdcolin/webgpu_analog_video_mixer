@@ -16,15 +16,26 @@
 // both warm toward amber.
 const WARM = vec3f(1.0, 0.62, 0.38);
 
-fn luma(c: vec3f) -> f32 {
-  return dot(c, vec3f(0.299, 0.587, 0.114));
+// Beam transfer: how gun drive becomes emitted phosphor light. Cutoff makes the
+// background true black (drive below the knee emits nothing), gamma is the gun's
+// luminance response (highlights bloom, shadows recede), saturation is applied
+// around luma *after* the transfer so vivid mids survive without posterizing.
+// Identity at cutoff=0, gamma=1, sat=1, so presets that don't set it are
+// untouched.
+fn beam(c: vec3f) -> vec3f {
+  var d = max(c - vec3f(P.crtCutoff), vec3f(0.0)) / max(1.0 - P.crtCutoff, 1e-3);
+  d = pow(max(d, vec3f(0.0)), vec3f(P.crtGamma));
+  let l = luma(d);
+  return mix(vec3f(l), d, P.crtSat);
 }
 
 // over-threshold colour, hue preserved: only the part of a pixel brighter than
-// t contributes light to its neighbours.
+// t contributes light to its neighbours. Taps go through the beam transfer so
+// bloom spreads gamma-expanded cores, not raw decoder voltages.
 fn bright(c: vec3f, t: f32) -> vec3f {
-  let l = luma(c);
-  return c * max(l - t, 0.0) / max(l, 1e-3);
+  let b = beam(c);
+  let l = luma(b);
+  return b * max(l - t, 0.0) / max(l, 1e-3);
 }
 
 @compute @workgroup_size(8, 8, 1)
@@ -34,10 +45,13 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   }
   let dim = vec2f(f32(ACTIVE_W), f32(ACTIVE_H));
   let uv = (vec2f(gid.xy) + 0.5) / dim;
-  var col = textureSampleLevel(srcTex, samp, uv, 0.0).rgb;
+  // Beam transfer → saturate → gamut-fit is the emissive stage: put it here so
+  // the feedback camera photographs phosphor light, not decoder voltages.
+  var col = gamutFit(beam(textureSampleLevel(srcTex, samp, uv, 0.0).rgb));
 
-  // Identity copy when the faceplate is disabled: keeps a clean signal clean
-  // and skips the tap work.
+  // Identity copy when the light behaviour is disabled: keeps a clean signal
+  // clean and skips the tap work. (The beam transfer above still ran, but it is
+  // identity unless a preset set cutoff/gamma/sat.)
   if (P.crtBloom + P.crtHalation + P.crtGlow <= 0.0) {
     textureStore(faceTex, vec2i(gid.xy), vec4f(col, 1.0));
     return;

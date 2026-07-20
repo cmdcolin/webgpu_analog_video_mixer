@@ -310,6 +310,31 @@ export const PRESETS: PresetDef[] = [
       'Intermittent contact: bands of the picture cut to snow and flicker as the plug wiggles.',
     patch: { connectorGlitch: 0.45, noiseIre: 2 },
   },
+  {
+    name: 'neon tube',
+    group: 'Phosphor / CRT',
+    blurb:
+      'A camcorder pointed at a CRT at night: beam cutoff crushes the background to true black, gamma blooms the cores white-hot, and saturated colour stays electric at the clipping point.',
+    patch: {
+      crtCutoff: 0.12,
+      crtGamma: 2.4,
+      crtSat: 1.4,
+      crtBloom: 0.6,
+      crtHalation: 0.5,
+      crtGlow: 0.3,
+      chromaGain: 1.5,
+    },
+  },
+  {
+    name: 'black restore',
+    group: 'Phosphor / CRT',
+    blurb:
+      'Just the beam transfer — cutoff and gun gamma with no bloom. Lifts the decoded pedestal off the floor for a clean tube with a genuinely black background.',
+    patch: {
+      crtCutoff: 0.08,
+      crtGamma: 2.2,
+    },
+  },
 ]
 
 export function presetControls(patch: Partial<Controls>): Controls {

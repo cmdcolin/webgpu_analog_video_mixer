@@ -123,6 +123,9 @@ export const DEFAULT_CONTROLS = {
   fbBlack: 0.03,
   fbKnee: 0.35,
   // CRT faceplate (what the feedback camera and display photograph)
+  crtCutoff: 0, // beam cutoff, 0 = off (identity, no black crush)
+  crtGamma: 1, // gun gamma, 1 = linear passthrough
+  crtSat: 1, // saturation around luma, 1 = unchanged
   crtBloom: 0,
   crtHalation: 0,
   crtGlow: 0,
@@ -965,6 +968,9 @@ export class Engine {
       fbVign: c.fbVign,
       fbBlack: c.fbBlack,
       fbKnee: c.fbKnee,
+      crtCutoff: c.crtCutoff,
+      crtGamma: c.crtGamma,
+      crtSat: c.crtSat,
       crtBloom: c.crtBloom,
       crtHalation: c.crtHalation,
       crtGlow: c.crtGlow,
