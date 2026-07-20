@@ -1,0 +1,32 @@
+/* fatal screen — rendered outside .app, so it carries its own font stack */
+.fatalWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+  background: #0a0a0c;
+  color: #c8c8d0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.fatalCard {
+  max-width: 560px;
+  background: #16161a;
+  border: 1px solid #3a3a44;
+  border-radius: 8px;
+  padding: 24px 28px;
+}
+.fatalTitle {
+  font-size: 18px;
+  margin: 0 0 12px;
+  color: #f66;
+}

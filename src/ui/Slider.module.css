@@ -1,0 +1,50 @@
+/* slider — inherits --mono (and font/color) from the .app ancestor */
+.slider {
+  display: block;
+  margin: 6px 0;
+}
+.sliderTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.value {
+  color: #7fd0a0;
+  font-family: var(--mono);
+}
+.range {
+  width: 100%;
+}
+.range:disabled {
+  opacity: 0.45;
+}
+
+/* inline icon buttons on a slider's value line */
+.icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0 0 6px;
+  font-size: 10px;
+  color: #4a4a58;
+}
+.iconOn {
+  color: #e0b040;
+}
+.iconSyncSet {
+  color: #8a7a40;
+}
+.iconMidiSet {
+  color: #7f9fd0;
+}
+.reset {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0 0 5px;
+  font-size: 11px;
+  color: #8888a0;
+}
+.resetDef {
+  color: #3a3a44;
+}

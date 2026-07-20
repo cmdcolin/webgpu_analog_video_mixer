@@ -16,32 +16,6 @@
   --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
 }
 
-.stage {
-  flex: 1;
-  position: relative;
-  min-width: 0;
-}
-.canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-.error {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  color: #f66;
-  font-family: var(--mono);
-}
-.stats {
-  position: absolute;
-  bottom: 8px;
-  left: 12px;
-  color: #4a4;
-  font-family: var(--mono);
-  font-size: 11px;
-}
-
 .panel {
   width: 300px;
   overflow-y: auto;
@@ -171,80 +145,6 @@
   margin: 0 0 4px;
 }
 
-/* slider */
-.slider {
-  display: block;
-  margin: 6px 0;
-}
-.sliderTop {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-.value {
-  color: #7fd0a0;
-  font-family: var(--mono);
-}
-.range {
-  width: 100%;
-}
-.range:disabled {
-  opacity: 0.45;
-}
-
-/* inline icon buttons on a slider's value line */
-.icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0 0 0 6px;
-  font-size: 10px;
-  color: #4a4a58;
-}
-.iconOn {
-  color: #e0b040;
-}
-.iconSyncSet {
-  color: #8a7a40;
-}
-.iconMidiSet {
-  color: #7f9fd0;
-}
-.reset {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0 0 0 5px;
-  font-size: 11px;
-  color: #8888a0;
-}
-.resetDef {
-  color: #3a3a44;
-}
-
-/* overlay buttons over the canvas */
-.overlayBar {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: flex;
-  gap: 6px;
-}
-.overlayBtn {
-  display: flex;
-  align-items: center;
-  background: rgba(22, 22, 26, 0.6);
-  color: #c8c8d0;
-  border: 1px solid #3a3a44;
-  border-radius: 3px;
-  padding: 4px 9px;
-  font: inherit;
-  cursor: pointer;
-}
-.overlayBtn:hover {
-  background: rgba(40, 40, 48, 0.85);
-}
-
 /* dialogs */
 .backdrop {
   position: fixed;
@@ -293,40 +193,7 @@
   padding-left: 18px;
 }
 
-/* fatal screen (rendered outside .app) */
-.fatalWrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100vw;
-  height: 100vh;
-  padding: 20px;
-  box-sizing: border-box;
-  background: #0a0a0c;
-  color: #c8c8d0;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
-  font-size: 13px;
-  line-height: 1.6;
-}
-.fatalCard {
-  max-width: 560px;
-  background: #16161a;
-  border: 1px solid #3a3a44;
-  border-radius: 8px;
-  padding: 24px 28px;
-}
-.fatalTitle {
-  font-size: 18px;
-  margin: 0 0 12px;
-  color: #f66;
-}
-
-/* text-color utilities */
+/* section rows + text-color utilities */
 .midiRow {
   display: flex;
   justify-content: space-between;
