@@ -117,6 +117,14 @@ export const DEFAULT_CONTROLS = {
   wipePos: 0.5,
   wipeSoft: 0.05,
   wipeRate: 0,
+  // picture-in-picture inset (source B), active-picture UV
+  pipMix: 0,
+  pipX: 0.72,
+  pipY: 0.28,
+  pipW: 0.36,
+  pipH: 0.36,
+  pipBorder: 0.006,
+  pipSoft: 0.004,
   // display
   scanBeam: 0.3,
 }
@@ -386,7 +394,8 @@ export class Engine {
     const perPixel = [Math.ceil(ACTIVE_WIDTH / 64), ACTIVE_HEIGHT] as const
     const perRow = [Math.ceil(LINES / 64), 1] as const
     const c = this.controls
-    const bOn = () => this.bEnabled && (c.bGain !== 0 || c.bRing !== 0)
+    const bOn = () =>
+      this.bEnabled && (c.bGain !== 0 || c.bRing !== 0 || c.pipMix !== 0)
 
     this.composePass = {
       label: 'compose',
@@ -833,6 +842,13 @@ export class Engine {
       bInv: c.bInv,
       wipeMode: c.wipeMode,
       wipeSoft: c.wipeSoft,
+      pipMix: c.pipMix,
+      pipX: c.pipX,
+      pipY: c.pipY,
+      pipW: c.pipW,
+      pipH: c.pipH,
+      pipBorder: c.pipBorder,
+      pipSoft: c.pipSoft,
       cfbMix: c.cfbMix,
       cfbGain: c.cfbGain,
       cfbDelay: c.cfbDelayUs * 1e-6 * SAMPLE_RATE,

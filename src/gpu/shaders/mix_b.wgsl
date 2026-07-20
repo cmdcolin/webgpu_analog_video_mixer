@@ -95,4 +95,46 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   // sum at the composite level; ring mod multiplies the two signals
   let a = comp[n];
   comp[n] = a + gate * (P.bGain * b + P.bRing * a * b * 0.01);
+
+  // Picture-in-picture: source B squeezed into a positionable window and keyed
+  // over the program. Unlike the dirty sum above, the inset is re-encoded with
+  // the HOUSE carrier (carrier(n, ...)), i.e. genlocked like a DVE re-times it
+  // through its frame store — so it dot-crawls but doesn't chroma-beat, and it
+  // sits rock-steady where B's own sync would otherwise fight. Active picture
+  // only; blanking, sync and burst stay on the program bus.
+  let inActive = s >= ACTIVE_START && s < ACTIVE_START + ACTIVE_W &&
+    row >= ACTIVE_TOP && row < ACTIVE_TOP + ACTIVE_H;
+  if (P.pipMix > 0.001 && inActive) {
+    let u = (f32(s) - f32(ACTIVE_START)) / f32(ACTIVE_W);
+    let v = (f32(row) - f32(ACTIVE_TOP)) / f32(ACTIVE_H);
+    let x0 = P.pipX - 0.5 * P.pipW;
+    let y0 = P.pipY - 0.5 * P.pipH;
+    // signed distance to the nearest window edge: >0 inside, grows toward center
+    let dIn = min(min(u - x0, x0 + P.pipW - u), min(v - y0, y0 + P.pipH - v));
+    let soft = max(P.pipSoft, 0.0005);
+    let key = smoothstep(0.0, soft, dIn);
+    if (key > 0.0) {
+      // remap the window onto B's full active picture, then re-encode chroma
+      let bu = clamp((u - x0) / P.pipW, 0.0, 1.0);
+      let bv = clamp((v - y0) / P.pipH, 0.0, 1.0);
+      let bsi = ACTIVE_START + u32(bu * f32(ACTIVE_W - 1u));
+      let bsrow = ACTIVE_TOP + u32(bv * f32(ACTIVE_H - 1u));
+      let bnp = bsrow * SPL + bsi;
+      let m = i32((ENC_CHROMA_TAPS - 1u) / 2u);
+      var uf = 0.0;
+      var vf = 0.0;
+      for (var k = 0u; k < ENC_CHROMA_TAPS; k = k + 1u) {
+        let idx = clampIdx(i32(bnp) + i32(k) - m);
+        let h = filters[SEC_ENC_CHROMA * FILTER_STRIDE + k];
+        uf = uf + h * yuvB[idx].y;
+        vf = vf + h * yuvB[idx].z;
+      }
+      let sc = carrierB(n, P.bHue); // house genlock, B's proc-amp hue trim only
+      var bp = IRE_BLACK + VIDEO_RANGE * (yuvB[bnp].x + uf * sc.x + vf * sc.y) * P.bVidGain;
+      bp = mix(bp, 107.5 - bp, P.bInv);
+      // matte border: a solid frame just inside the window edge
+      let inset = select(bp, IRE_BLACK + VIDEO_RANGE * 0.9, dIn < P.pipBorder);
+      comp[n] = mix(comp[n], inset, key * P.pipMix);
+    }
+  }
 }

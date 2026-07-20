@@ -54,6 +54,15 @@ export const PARAM_DEFS = [
   ['wipeMode', 'f32'], // 0 off, 1 h, 2 v, 3 box, 4 diamond
   ['wipePos', 'f32'], // wipe position incl. auto-sweep (accumulated)
   ['wipeSoft', 'f32'], // wipe edge softness
+  // picture-in-picture: source B squeezed into a positionable window, re-encoded
+  // genlocked to the house raster (a DVE/switcher inset — dot-crawls, no beat)
+  ['pipMix', 'f32'], // inset key over program, 0 off
+  ['pipX', 'f32'], // window center X, active-picture UV
+  ['pipY', 'f32'], // window center Y, active-picture UV
+  ['pipW', 'f32'], // window width, active-picture UV
+  ['pipH', 'f32'], // window height, active-picture UV
+  ['pipBorder', 'f32'], // matte border thickness, active-picture UV
+  ['pipSoft', 'f32'], // window edge softness, active-picture UV
   // decoder
   ['combMode', 'f32'], // 0 chroma trap, 1 two-line comb, 2 three-line comb
   ['hHold', 'f32'], // sync PLL gain (horizontal hold)

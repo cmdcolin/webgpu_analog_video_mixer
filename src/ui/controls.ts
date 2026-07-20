@@ -318,6 +318,33 @@ export const GROUPS: Group[] = [
     ],
   },
   {
+    name: 'PiP inset (source B)',
+    ab: true,
+    sliders: [
+      { key: 'pipMix', label: 'inset key', min: 0, max: 1, step: 0.01, unit: '' },
+      { key: 'pipX', label: 'center x', min: 0, max: 1, step: 0.005, unit: '' },
+      { key: 'pipY', label: 'center y', min: 0, max: 1, step: 0.005, unit: '' },
+      { key: 'pipW', label: 'width', min: 0.1, max: 1, step: 0.005, unit: '' },
+      { key: 'pipH', label: 'height', min: 0.1, max: 1, step: 0.005, unit: '' },
+      {
+        key: 'pipBorder',
+        label: 'border',
+        min: 0,
+        max: 0.03,
+        step: 0.001,
+        unit: '',
+      },
+      {
+        key: 'pipSoft',
+        label: 'edge soft',
+        min: 0,
+        max: 0.05,
+        step: 0.001,
+        unit: '',
+      },
+    ],
+  },
+  {
     name: 'Tape / Channel',
     sliders: [
       {
