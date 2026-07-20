@@ -14,6 +14,20 @@ feedback loops as well (a camera pointed at its own monitor, and a
 hardware-mixer loop), and you can dirty-mix in a second source. All in WebGPU
 compute shaders, in real time.
 
+![Phosphene — mixer-loop feedback on SMPTE bars](docs/gallery/hero.jpg)
+
+## Gallery
+
+|                                                                             |                                                                                |                                                                                        |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| ![vhs](docs/gallery/vhs.jpg)                                                | ![mixer loop](docs/gallery/mixer-loop.jpg)                                     | ![fb bloom](docs/gallery/fb-bloom.jpg)                                                 |
+| <sub>**vhs** — color-under chroma, head-switch wobble, dropouts</sub>       | <sub>**mixer loop** — the composite waveform fed back into itself</sub>        | <sub>**fb bloom** — camera-at-monitor feedback blooming through the CRT</sub>          |
+| ![dirty mix](docs/gallery/dirty-mix.jpg)                                    | ![s-video miswire](docs/gallery/svideo-miswire.jpg)                            | ![dead channel](docs/gallery/dead-channel.jpg)                                         |
+| <sub>**dirty mix** — a second, non-genlocked source beating against A</sub> | <sub>**s-video miswire** — luma leaking into the chroma pin as rainbows</sub>  | <sub>**dead channel** — RF snow swallowing the last of the signal</sub>                |
+
+<sup>Regenerate with `node scripts/gallery.mjs` (dev server + Firefox Nightly
+running, see below).</sup>
+
 ## Run
 
 ```
@@ -27,7 +41,9 @@ linear-phase symmetry, filter-bank packing). CI gates deploy on `pnpm lint` +
 
 - **Sources**: SMPTE bars, multiburst sweep, video/image file, webcam; plus an
   independent source B for the dirty mixer.
-- **Presets**: built-ins + 8 save slots (`1`-`8` load, `shift+1`-`8` save).
+- **Presets**: built-ins + 9 scene slots (`1`–`9` recall, `shift+1`–`9` save).
+- **Performing**: `f` fullscreens the stage, and **⧉ pop out** moves the
+  controls into their own window — project one screen, tweak from the other.
 - **URL params**: `?set=key:value,...`, `?vurl=…`, `?src=sweep|webcam`,
   `?dbg=1..5`, `?prof` (per-pass GPU timings in the console, needs
   timestamp-query support).
@@ -114,7 +130,10 @@ which is why it's Firefox.
 
 ---
 
-This project was kicked off with [Fable](https://claude.com/). It really nailed
-the crazy complexity of the task. I had previously asked Opus and it was not
-nearly this good — though it targeted Python, it really just didn't understand
-the 'signal level' ideas for making the glitches.
+Note: This project is extensively vibecoded. It was initially prototyped with
+[Fable](https://claude.com/) which (IMO) nailed the complexity of the task. I
+had previously asked Opus and it was not nearly this good — though it targeted
+Python and static image rendering, but there, it really just didn't understand
+the 'signal level' ideas for making the glitches which was odd because I had
+previously had good experience with Opus. I bet it could be done but Fable
+basically one-shotted the initial design rendering almost perfectly.
