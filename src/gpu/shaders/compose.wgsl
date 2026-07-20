@@ -1,6 +1,7 @@
-// Camera-at-monitor feedback: the previous decoded frame is re-photographed
-// through a camera model — affine reframe, lens defocus + vignette, then the
-// sensor's black cut and s-curve (AGC knee) — and mixed with the live source.
+// Camera-at-monitor feedback: the previous frame's CRT face (faceTex, the
+// glowing screen from crt_face — not the raw decode) is re-photographed through
+// a camera model — affine reframe, lens defocus + vignette, then the sensor's
+// black cut and s-curve (AGC knee) — and mixed with the live source.
 // The nonlinearity is what makes the loop organic: bright cores bloom, dim
 // trails decay into black instead of hovering as gray copies. The result is
 // the encoder input, so every generation traverses the full analog chain.

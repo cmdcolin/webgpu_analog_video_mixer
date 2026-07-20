@@ -40,6 +40,34 @@ export function bandpass(
   return h
 }
 
+// Causal one-pole lowpass truncated to an FIR: an exponential tail over the
+// preceding samples only (taps past the center are zero). Models a delay-line
+// chroma decoder whose color trails rightward past an edge instead of smearing
+// symmetrically. Same -3 dB point as the one-pole with this cutoff.
+export function lowpassCausal(cutoffHz: number, taps: number): Float32Array {
+  const m = (taps - 1) / 2
+  const a = Math.exp((-2 * Math.PI * cutoffHz) / SAMPLE_RATE)
+  const h = new Float32Array(taps)
+  let sum = 0
+  for (let k = 0; k <= m; k++) {
+    h[k] = Math.pow(a, m - k)
+    sum += h[k]
+  }
+  for (let k = 0; k <= m; k++) h[k] = h[k] / sum
+  return h
+}
+
+// Pointwise blend of two same-length kernels (both unity-DC stays unity-DC).
+export function mixTaps(
+  a: Float32Array,
+  b: Float32Array,
+  t: number,
+): Float32Array {
+  const h = new Float32Array(a.length)
+  for (let k = 0; k < a.length; k++) h[k] = a[k] + (b[k] - a[k]) * t
+  return h
+}
+
 // Lowpass with high-frequency peaking mixed in: delta + peak*(delta - lp2).
 // Models the luma "sharpness" boost of tape decks -> edge overshoot and ringing.
 export function lowpassPeaked(

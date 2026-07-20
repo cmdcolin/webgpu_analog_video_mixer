@@ -16,7 +16,9 @@ import {
   TAPS,
   bandpass,
   lowpass,
+  lowpassCausal,
   lowpassPeaked,
+  mixTaps,
   packFilterBank,
 } from '../signal/filters'
 import { FSC } from '../signal/constants'
@@ -30,6 +32,7 @@ import { GEN_OFFSET, PARAM_BYTES, PRELUDE, packParams } from './prelude'
 import channelSrc from './shaders/channel.wgsl?raw'
 import chromaExtractSrc from './shaders/chroma_extract.wgsl?raw'
 import composeSrc from './shaders/compose.wgsl?raw'
+import crtFaceSrc from './shaders/crt_face.wgsl?raw'
 import decodeSrc from './shaders/decode.wgsl?raw'
 import timebaseSrc from './shaders/timebase.wgsl?raw'
 import underDownSrc from './shaders/under_down.wgsl?raw'
@@ -54,6 +57,8 @@ export const DEFAULT_CONTROLS = {
   invert: 0, // polarity flip on the composite line (alligator-pin swap)
   // decoder
   demodMHz: 0.6,
+  chromaTail: 0, // causal demod kernel blend: color trails rightward past edges
+  chromaCoarse: 1, // chroma reconstruction lattice, samples (>1 = CUE rainbows)
   chromaGain: 1,
   burstLock: 1,
   killThresh: 2, // IRE
@@ -94,6 +99,10 @@ export const DEFAULT_CONTROLS = {
   fbVign: 0.2,
   fbBlack: 0.03,
   fbKnee: 0.35,
+  // CRT faceplate (what the feedback camera and display photograph)
+  crtBloom: 0,
+  crtHalation: 0,
+  crtGlow: 0,
   // mixer loop (composite-level feedback)
   cfbMix: 0,
   cfbGain: 1,
@@ -133,6 +142,10 @@ export const DEFAULT_CONTROLS = {
   trackPos: 0.85,
   // display
   scanBeam: 0.3,
+  phosphor: 0, // persistence: green retention per frame; red/blue decay faster
+  crtSharp: 0,
+  maskAmt: 0,
+  maskPitch: 3,
 }
 
 export type Controls = typeof DEFAULT_CONTROLS
@@ -141,6 +154,7 @@ export type ControlKey = keyof Controls
 const FILTER_KEYS: ReadonlySet<string> = new Set([
   'encChromaMHz',
   'demodMHz',
+  'chromaTail',
   'lumaMHz',
   'lumaPeak',
 ])
@@ -201,6 +215,7 @@ export class Engine {
   private lineParamsBuf: GPUBuffer
   private timingBuf: GPUBuffer
   private syncMeasureBuf: GPUBuffer
+  private persistBuf: GPUBuffer
 
   private srcTex: GPUTexture
   private srcAspect = 4 / 3
@@ -218,6 +233,9 @@ export class Engine {
   private noiseSource = 0
   private inputTex: GPUTexture
   private outTex: GPUTexture
+  // The decoded frame rendered as a glowing CRT face (bloom/halation/glow).
+  // Both the display and the feedback camera sample this, not the raw signal.
+  private faceTex: GPUTexture
   private linearSamp: GPUSampler
 
   // The signal chain, as data: pre-chain (source assembly, dirty mix, loop
@@ -302,6 +320,11 @@ export class Engine {
       size: LINES * 16,
       usage: GPUBufferUsage.STORAGE,
     })
+    // phosphor persistence state: previous displayed frame, packed rgba8
+    this.persistBuf = d.createBuffer({
+      size: ACTIVE_WIDTH * ACTIVE_HEIGHT * 4,
+      usage: GPUBufferUsage.STORAGE,
+    })
 
     const texDesc = (usage: number): GPUTextureDescriptor => ({
       size: [ACTIVE_WIDTH, ACTIVE_HEIGHT],
@@ -328,6 +351,11 @@ export class Engine {
       ),
     )
     this.outTex = d.createTexture(
+      texDesc(
+        GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+      ),
+    )
+    this.faceTex = d.createTexture(
       texDesc(
         GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
       ),
@@ -366,6 +394,7 @@ export class Engine {
     const syncPl = compute(syncSrc)
     const lineAnalyzePl = compute(lineAnalyzeSrc)
     const decodePl = compute(decodeSrc)
+    const crtFacePl = compute(crtFaceSrc)
 
     const presentModule = module(presentSrc)
     this.presentPl = d.createRenderPipeline({
@@ -398,6 +427,11 @@ export class Engine {
     })
     const perLine = [Math.ceil(SAMPLES_PER_LINE / 64), LINES] as const
     const perPixel = [Math.ceil(ACTIVE_WIDTH / 64), ACTIVE_HEIGHT] as const
+    // 8x8 workgroups for the 2D spatial passes (compose, crtFace)
+    const perTile = [
+      Math.ceil(ACTIVE_WIDTH / 8),
+      Math.ceil(ACTIVE_HEIGHT / 8),
+    ] as const
     const perRow = [Math.ceil(LINES / 64), 1] as const
     const c = this.controls
     const bOn = () =>
@@ -407,8 +441,8 @@ export class Engine {
       label: 'compose',
       pl: this.composePl,
       bg: this.makeComposeBg(),
-      x: Math.ceil(ACTIVE_WIDTH / 8),
-      y: Math.ceil(ACTIVE_HEIGHT / 8),
+      x: perTile[0],
+      y: perTile[1],
     }
     this.prePasses = [
       this.composePass,
@@ -546,8 +580,23 @@ export class Engine {
           { buffer: this.lineInfoBuf },
           { buffer: this.timingBuf },
           this.outTex.createView(),
+          { buffer: this.persistBuf },
         ],
         perPixel,
+      ),
+      // Photograph the decoded signal as a glowing CRT face; both the display
+      // and next frame's feedback camera sample faceTex, so the loop
+      // re-photographs an emissive screen rather than the raw signal buffer.
+      pass(
+        'crtFace',
+        crtFacePl,
+        [
+          { buffer: this.paramsBuf },
+          this.outTex.createView(),
+          this.linearSamp,
+          this.faceTex.createView(),
+        ],
+        perTile,
       ),
       // frame-store capture of what the decoder saw; strobe holds by skipping.
       // Trails force an even period so every capture shares one subcarrier
@@ -577,7 +626,7 @@ export class Engine {
       layout: this.presentPl.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: { buffer: this.paramsBuf } },
-        { binding: 1, resource: this.outTex.createView() },
+        { binding: 1, resource: this.faceTex.createView() },
         { binding: 2, resource: this.linearSamp },
       ],
     })
@@ -721,7 +770,7 @@ export class Engine {
       entries: [
         { binding: 0, resource: { buffer: this.paramsBuf } },
         { binding: 1, resource: this.srcTex.createView() },
-        { binding: 2, resource: this.outTex.createView() },
+        { binding: 2, resource: this.faceTex.createView() },
         { binding: 3, resource: this.linearSamp },
         { binding: 4, resource: this.inputTex.createView() },
       ],
@@ -764,9 +813,16 @@ export class Engine {
       this.lineParamsBuf,
       this.timingBuf,
       this.syncMeasureBuf,
+      this.persistBuf,
     ]
     for (const b of bufs) b.destroy()
-    for (const t of [this.srcTex, this.srcTexB, this.inputTex, this.outTex])
+    for (const t of [
+      this.srcTex,
+      this.srcTexB,
+      this.inputTex,
+      this.outTex,
+      this.faceTex,
+    ])
       t.destroy()
     // Frees everything else the device owns (pipelines, bind groups) and drops
     // the swap-chain configuration.
@@ -784,7 +840,14 @@ export class Engine {
     const bank = packFilterBank(
       new Map([
         [SEC_ENC_CHROMA, lowpass(c.encChromaMHz * 1e6, TAPS.encChroma)],
-        [SEC_DEMOD, lowpass(c.demodMHz * 1e6, TAPS.demod)],
+        [
+          SEC_DEMOD,
+          mixTaps(
+            lowpass(c.demodMHz * 1e6, TAPS.demod),
+            lowpassCausal(c.demodMHz * 1e6, TAPS.demod),
+            c.chromaTail,
+          ),
+        ],
         [
           SEC_LUMA,
           lowpassPeaked(
@@ -841,6 +904,9 @@ export class Engine {
       fbVign: c.fbVign,
       fbBlack: c.fbBlack,
       fbKnee: c.fbKnee,
+      crtBloom: c.crtBloom,
+      crtHalation: c.crtHalation,
+      crtGlow: c.crtGlow,
       bGain: c.bGain,
       bRing: c.bRing,
       bHue: (c.bHueDeg * Math.PI) / 180,
@@ -870,7 +936,12 @@ export class Engine {
       cfbTrail: c.cfbTrail,
       soundIre: c.soundIre,
       agc: c.agc,
+      chromaCoarse: c.chromaCoarse,
       scanBeam: c.scanBeam,
+      phosphor: c.phosphor,
+      crtSharp: c.crtSharp,
+      maskAmt: c.maskAmt,
+      maskPitch: c.maskPitch,
       dbgView: this.dbgView,
     }
   }

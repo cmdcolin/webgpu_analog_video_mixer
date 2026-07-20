@@ -78,6 +78,7 @@ export const PARAM_DEFS = [
   ['burstLock', 'f32'], // 0..1: how much the decoder trusts the (degraded) burst
   ['killThresh', 'f32'], // IRE of burst amplitude below which color killer engages
   ['svideoBleed', 'f32'], // Y/C cross-wire: chroma bled into luma (0.5 defeats the trap)
+  ['chromaCoarse', 'f32'], // chroma demod decimation factor; >1 lerps between lattice points (CUE rainbows)
   // channel / tape
   ['soundIre', 'f32'], // 4.5 MHz sound carrier leaking past the trap, IRE
   ['agc', 'f32'], // receiver AGC action, 0 fixed gain .. 1 full
@@ -104,6 +105,11 @@ export const PARAM_DEFS = [
   ['fbVign', 'f32'], // lens vignette strength
   ['fbBlack', 'f32'], // sensor black cut level (trails die into black)
   ['fbKnee', 'f32'], // sensor s-curve amount (bloom + highlight compression)
+  // CRT faceplate: the emissive screen the camera photographs (and the display
+  // shows). Sits between the decoded signal and the camera/lens model above.
+  ['crtBloom', 'f32'], // highlight bloom spread from bright phosphor cores
+  ['crtHalation', 'f32'], // wide warm glass-scatter halo around highlights
+  ['crtGlow', 'f32'], // phosphor black-level glow / faceplate haze
   // mixer loop: previous frame's composite fed back electrically
   ['cfbMix', 'f32'], // crossfader position toward the loop bus
   ['cfbGain', 'f32'], // loop proc-amp trim, negative inverts
@@ -115,6 +121,10 @@ export const PARAM_DEFS = [
   ['cfbTrail', 'f32'], // frame-store peak-hold decay (trails), 0 = plain capture
   // display
   ['scanBeam', 'f32'], // finite beam-spot strength between scanlines
+  ['phosphor', 'f32'], // P22 persistence: green-channel frame-to-frame retention (R/B decay faster)
+  ['crtSharp', 'f32'], // horizontal Catmull-Rom reconstruction blend (0 bilinear)
+  ['maskAmt', 'f32'], // aperture grille strength
+  ['maskPitch', 'f32'], // grille triad pitch, canvas pixels
   ['dbgView', 'f32'], // 0 normal, 1 gradient (present test), 2 raw composite (encode test)
 ] as const
 

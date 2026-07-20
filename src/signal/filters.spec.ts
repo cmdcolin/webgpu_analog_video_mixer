@@ -5,7 +5,9 @@ import {
   TAPS,
   bandpass,
   lowpass,
+  lowpassCausal,
   lowpassPeaked,
+  mixTaps,
   packFilterBank,
 } from './filters'
 
@@ -88,6 +90,48 @@ describe('lowpassPeaked', () => {
 
   it('preserves unity DC gain (peaking adds zero-DC content)', () => {
     const h = lowpassPeaked(4.2e6, 0.8, 3.15e6, 49)
+    let sum = 0
+    for (const v of h) sum += v
+    expect(sum).toBeCloseTo(1, 6)
+  })
+})
+
+describe('lowpassCausal', () => {
+  it('has unity DC gain', () => {
+    const h = lowpassCausal(0.6e6, 41)
+    let sum = 0
+    for (const v of h) sum += v
+    expect(sum).toBeCloseTo(1, 6)
+  })
+
+  it('is one-sided (no leading taps past the center)', () => {
+    const h = lowpassCausal(0.6e6, 41)
+    const m = (41 - 1) / 2
+    for (let k = m + 1; k < h.length; k++) expect(h[k]).toBe(0)
+    // energy sits behind the center: peak tap is the center, tail decays back
+    expect(h[m]).toBeGreaterThan(h[m - 1])
+    expect(h[m - 1]).toBeGreaterThan(h[0])
+  })
+
+  it('low-passes: rejects above the cutoff', () => {
+    expect(response(lowpassCausal(0.6e6, 41), 4e6)).toBeLessThan(0.2)
+  })
+})
+
+describe('mixTaps', () => {
+  it('returns the endpoints at t=0 and t=1', () => {
+    const a = lowpass(0.6e6, 41)
+    const b = lowpassCausal(0.6e6, 41)
+    const at0 = mixTaps(a, b, 0)
+    const at1 = mixTaps(a, b, 1)
+    for (let k = 0; k < a.length; k++) {
+      expect(at0[k]).toBeCloseTo(a[k], 12)
+      expect(at1[k]).toBeCloseTo(b[k], 12)
+    }
+  })
+
+  it('preserves unity DC gain for a blend of unity-DC kernels', () => {
+    const h = mixTaps(lowpass(0.6e6, 41), lowpassCausal(0.6e6, 41), 0.4)
     let sum = 0
     for (const v of h) sum += v
     expect(sum).toBeCloseTo(1, 6)

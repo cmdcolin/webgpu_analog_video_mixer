@@ -10,6 +10,7 @@
 @group(0) @binding(3) var<storage, read> lineInfo: array<vec4f>;
 @group(0) @binding(4) var<storage, read> timing: array<f32>;
 @group(0) @binding(5) var outTex: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(6) var<storage, read_write> persist: array<u32>;
 
 // chroma-path source per Y/C separation mode
 fn csrc(i: u32) -> f32 {
@@ -28,6 +29,22 @@ fn csrc(i: u32) -> f32 {
 // workgroup shares one raster row (and its sync offset), so the demod FIR
 // reads shared memory instead of 1-3 storage loads per tap
 var<workgroup> tile: array<f32, TILE>;
+
+// synchronous chroma demod centered on tile index ti / global sample n0.
+// Offsets stay within the halo for |off| <= HALO - (DEMOD_TAPS-1)/2.
+fn demodAt(ti: i32, n0: i32) -> vec2f {
+  let m = i32((DEMOD_TAPS - 1u) / 2u);
+  var us = 0.0;
+  var vs = 0.0;
+  for (var k = 0; k < i32(DEMOD_TAPS); k = k + 1) {
+    let c = tile[u32(ti + k - m)];
+    let sc = carrier(clampIdx(n0 + k - m), P.frame);
+    let h = filters[SEC_DEMOD * FILTER_STRIDE + u32(k)];
+    us = us + h * c * sc.x;
+    vs = vs + h * c * sc.y;
+  }
+  return vec2f(us, vs);
+}
 
 @compute @workgroup_size(64, 1, 1)
 fn main(
@@ -59,17 +76,25 @@ fn main(
     return;
   }
 
-  let m = (DEMOD_TAPS - 1u) / 2u;
-  var us = 0.0;
-  var vs = 0.0;
-  for (var k = 0u; k < DEMOD_TAPS; k = k + 1u) {
-    let ni = clampIdx(i32(n) + i32(k) - i32(m));
-    let c = tile[lid.x + HALO + k - m];
-    let sc = carrier(ni, P.frame);
-    let h = filters[SEC_DEMOD * FILTER_STRIDE + k];
-    us = us + h * c * sc.x;
-    vs = vs + h * c * sc.y;
+  // Chroma reconstruction lattice: at coarse > 1 the demod runs only at every
+  // coarse-th sample and pixels between get linear interpolation — the digital
+  // decoder's chroma-upsampling error. Interpolated U/V re-attach to the wrong
+  // subcarrier phase at edges, blooming dither and fine detail into rainbows.
+  // Factor 8 keeps the farthest tap within the tile halo (20 + 8 <= 32).
+  let ti = i32(lid.x + HALO);
+  let coarse = u32(clamp(P.chromaCoarse, 1.0, 8.0));
+  var uvd: vec2f;
+  if (coarse > 1u) {
+    let x0 = (gid.x / coarse) * coarse;
+    let d0 = i32(x0) - i32(gid.x);
+    let a = demodAt(ti + d0, i32(n) + d0);
+    let b = demodAt(ti + d0 + i32(coarse), i32(n) + d0 + i32(coarse));
+    uvd = mix(a, b, f32(gid.x - x0) / f32(coarse));
+  } else {
+    uvd = demodAt(ti, i32(n));
   }
+  var us = uvd.x;
+  var vs = uvd.y;
   // receiver AGC: IF gain ahead of the demod, so luma, chroma, and black
   // level all pump together when sync depth is mismeasured
   let gif = mix(1.0, timing[527u], P.agc);
@@ -122,5 +147,17 @@ fn main(
     yn - 0.395 * un - 0.581 * vn,
     yn + 2.032 * un,
   );
-  textureStore(outTex, vec2i(gid.xy), vec4f(clamp(rgb, vec3f(0.0), vec3f(1.0)), 1.0));
+  // P22 phosphor persistence: peak-hold against the decaying previous screen.
+  // Green phosphor lingers longest, blue dies first, so trails go green-ish.
+  // Lives on outTex (not in present) so the camera-feedback loop films a
+  // persisting screen, as a real camera-at-monitor rig would.
+  var outc = clamp(rgb, vec3f(0.0), vec3f(1.0));
+  let pi = gid.y * ACTIVE_W + gid.x;
+  if (P.phosphor > 0.0) {
+    let g = min(P.phosphor, 0.98);
+    let decay = vec3f(pow(g, 1.7), g, pow(g, 2.4));
+    outc = max(outc, unpack4x8unorm(persist[pi]).rgb * decay);
+  }
+  persist[pi] = pack4x8unorm(vec4f(outc, 1.0));
+  textureStore(outTex, vec2i(gid.xy), vec4f(outc, 1.0));
 }

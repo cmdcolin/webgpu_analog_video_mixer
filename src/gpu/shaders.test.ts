@@ -14,6 +14,7 @@ import { PRELUDE } from './prelude'
 import channel from './shaders/channel.wgsl?raw'
 import chromaExtract from './shaders/chroma_extract.wgsl?raw'
 import compose from './shaders/compose.wgsl?raw'
+import crtFace from './shaders/crt_face.wgsl?raw'
 import decode from './shaders/decode.wgsl?raw'
 import encodeComposite from './shaders/encode_composite.wgsl?raw'
 import encodeYuv from './shaders/encode_yuv.wgsl?raw'
@@ -31,6 +32,7 @@ const SHADERS: Record<string, string> = {
   channel,
   chroma_extract: chromaExtract,
   compose,
+  crt_face: crtFace,
   decode,
   encode_composite: encodeComposite,
   encode_yuv: encodeYuv,
