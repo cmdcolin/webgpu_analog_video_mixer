@@ -562,7 +562,9 @@ export function App() {
   const selectSource = (mode: SourceMode) => {
     const engine = engineRef.current
     if (engine) {
-      setError('') // a fresh source attempt clears any stale failure banner
+      // Every source change starts here (file picks too — the file dialog is
+      // only opened from this handler), so clear any stale failure banner once.
+      setError('')
       // For file, wait until a file is actually picked before touching state:
       // cancelling the OS dialog then leaves the current source untouched.
       if (mode === 'file') {
@@ -598,7 +600,6 @@ export function App() {
   const onFile = (file: File | undefined) => {
     const engine = engineRef.current
     if (file && engine) {
-      setError('')
       stopVideo()
       setSourceMode('file')
       if (file.type.startsWith('image/')) {
@@ -631,7 +632,7 @@ export function App() {
   const selectSourceB = (mode: SourceBMode) => {
     const engine = engineRef.current
     if (engine) {
-      setError('')
+      setError('') // entry for every B change (incl. file dialog); clear once
       if (mode === 'file') {
         fileInputBRef.current?.click()
       } else {
@@ -647,7 +648,6 @@ export function App() {
   const onFileB = (file: File | undefined) => {
     const engine = engineRef.current
     if (file && engine) {
-      setError('')
       stopVideoB()
       setSourceBMode('file')
       engine.setSourceBEnabled(true)
