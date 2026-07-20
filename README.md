@@ -33,6 +33,8 @@ compute shaders, in real time.
 | <sub>**vhs** — a photo dubbed to tape: color-under chroma, head-switch wobble, dropouts</sub> | <sub>**mixer loop** — the composite waveform fed back into itself</sub>        | <sub>**fb bloom** — camera-at-monitor feedback blooming through the CRT</sub>          |
 | ![Dirty mix of a second non-genlocked source beating against A](docs/gallery/dirty-mix.jpg) | ![S-video miswire: luma leaking into the chroma pin as rainbows over a photo](docs/gallery/svideo-miswire.jpg) | ![Weak broadcast: RF snow creeping in over a distant outdoor scene](docs/gallery/broadcast.jpg) |
 | <sub>**dirty mix** — a second, non-genlocked source beating against A</sub> | <sub>**s-video miswire** — luma leaking into the chroma pin as rainbows</sub>  | <sub>**weak broadcast** — a distant RF signal, snow creeping in from the top</sub>     |
+| ![Negative video: a cat photo with its colors inverted to their complements](docs/gallery/negative.jpg) | ![A backlit outdoor sunset scene softened and scanlined by the tape path](docs/gallery/sunset.jpg) | ![Strobe trails: feedback smearing each frame of the cat photo into the next](docs/gallery/strobe.jpg) |
+| <sub>**negative** — polarity flipped, everything glowing in complementary colors</sub> | <sub>**faded dub** — a backlit outdoor scene worn soft by the tape path</sub>  | <sub>**strobe trails** — feedback smearing each frame into the next</sub>              |
 
 <sup>Regenerate with `node scripts/gallery.mjs` (dev server + Firefox Nightly
 running, see below).</sup>
