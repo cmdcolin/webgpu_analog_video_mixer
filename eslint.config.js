@@ -30,8 +30,15 @@ export default tseslint.config(
       'react-refresh': reactRefresh,
     },
     rules: {
+      ...reactHooks.configs.recommended.rules,
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
+      // The stage passes live engine state (fps stats, resolution) to overlays
+      // as mutable refs rather than re-rendering React at 60fps, which this
+      // rule forbids on principle. React Compiler declines to compile those
+      // components as a result — an accepted trade for the render loop; the
+      // rest of the UI compiles.
+      'react-hooks/refs': 'off',
       // eslint-plugin-react-hooks already owns dependency-array analysis (and
       // the mount-once effects carry its disable comments); drop eslint-react's
       // duplicate so a single rule reports it.
