@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { FrameStats } from '../gpu/pipeline'
 import styles from './FpsMonitor.module.css'
 
-// Rolling history of per-window worst-frame times, drawn as a sparkline so a
-// freeze shows up as a spike the averaged fps number hides. Fixed 100 ms scale
-// keeps healthy frames readable; anything longer clamps to the top and the
-// numeric worst readout carries the true magnitude.
-const HISTORY = 120 // ~1 min at one sample per 30 frames
-const SCALE_MS = 100
-const GOOD_MS = 1000 / 60 // 16.7 — one frame at 60 fps
-const OK_MS = 1000 / 30 // 33.3 — one frame at 30 fps
+// Always-on rolling histogram of recent per-window fps. Each bar is one 30-frame
+// sample; a dip below the 60/30 fps reference lines shows a stall the averaged
+// number alone would smooth over. Scaled to a 65 fps ceiling so a healthy signal
+// nearly fills the bar and any shortfall reads as a visible gap at the top.
+const HISTORY = 60 // ~30 s at one sample per 30 frames
+const SCALE_FPS = 65
+const GOOD_FPS = 60
+const OK_FPS = 30
 
-function barColor(ms: number): string {
-  return ms < 20 ? '#4a4' : ms < 40 ? '#cc4' : '#e55'
+function barColor(fps: number): string {
+  return fps >= 55 ? '#4a4' : fps >= 28 ? '#cc4' : '#e55'
 }
 
 function draw(canvas: HTMLCanvasElement, history: number[]) {
@@ -28,8 +28,8 @@ function draw(canvas: HTMLCanvasElement, history: number[]) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)'
     ctx.fillRect(0, 0, w, h)
     // 60 fps and 30 fps reference lines
-    for (const ref of [GOOD_MS, OK_MS]) {
-      const y = h - (Math.min(ref, SCALE_MS) / SCALE_MS) * h
+    for (const ref of [GOOD_FPS, OK_FPS]) {
+      const y = h - (ref / SCALE_FPS) * h
       ctx.strokeStyle = 'rgba(200,200,208,0.25)'
       ctx.beginPath()
       ctx.moveTo(0, y)
@@ -37,9 +37,9 @@ function draw(canvas: HTMLCanvasElement, history: number[]) {
       ctx.stroke()
     }
     const bw = w / HISTORY
-    history.forEach((ms, i) => {
-      const bh = Math.min(ms, SCALE_MS) / SCALE_MS * h
-      ctx.fillStyle = barColor(ms)
+    history.forEach((fps, i) => {
+      const bh = (Math.min(fps, SCALE_FPS) / SCALE_FPS) * h
+      ctx.fillStyle = barColor(fps)
       ctx.fillRect(i * bw, h - bh, Math.max(bw - 0.5, 1), bh)
     })
   }
@@ -47,27 +47,22 @@ function draw(canvas: HTMLCanvasElement, history: number[]) {
 
 export function FpsMonitor(props: { stats: FrameStats; res: string }) {
   const { fps, worstMs } = props.stats
-  const [open, setOpen] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const historyRef = useRef<number[]>([])
 
-  // Each new stats object is one window sample; append and redraw the graph.
+  // Each new stats object is one window sample; append and redraw the histogram.
   useEffect(() => {
-    historyRef.current = [...historyRef.current, worstMs].slice(-HISTORY)
+    historyRef.current = [...historyRef.current, fps].slice(-HISTORY)
     const canvas = canvasRef.current
-    if (open && canvas !== null) draw(canvas, historyRef.current)
-  }, [worstMs, open])
+    if (canvas !== null) draw(canvas, historyRef.current)
+  }, [fps])
 
   return (
     <div className={styles.monitor}>
-      <button
-        className={styles.readout}
-        onClick={() => setOpen(o => !o)}
-        title="toggle frame-time graph"
-      >
+      <canvas ref={canvasRef} className={styles.graph} />
+      <span className={styles.readout}>
         {fps.toFixed(0)} fps · worst {worstMs.toFixed(0)}ms · {props.res}
-      </button>
-      {open ? <canvas ref={canvasRef} className={styles.graph} /> : null}
+      </span>
     </div>
   )
 }
