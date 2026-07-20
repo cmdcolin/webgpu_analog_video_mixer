@@ -1,3 +1,4 @@
+import eslintReact from '@eslint-react/eslint-plugin'
 import js from '@eslint/js'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
@@ -14,6 +15,7 @@ export default tseslint.config(
       js.configs.recommended,
       ...tseslint.configs.strictTypeChecked,
       ...tseslint.configs.stylisticTypeChecked,
+      eslintReact.configs['recommended-typescript'],
     ],
     languageOptions: {
       ecmaVersion: 2022,
@@ -30,6 +32,10 @@ export default tseslint.config(
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
+      // eslint-plugin-react-hooks already owns dependency-array analysis (and
+      // the mount-once effects carry its disable comments); drop eslint-react's
+      // duplicate so a single rule reports it.
+      '@eslint-react/exhaustive-deps': 'off',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
