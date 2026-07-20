@@ -6,8 +6,8 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { DEFAULT_CONTROLS } from './gpu/pipeline'
-import type { ControlKey, Controls } from './gpu/pipeline'
+import { DEFAULT_CONTROLS } from './controls'
+import type { ControlKey, Controls } from './controls'
 import { GROUPS, type Group } from './ui/controls'
 import { SYNCABLE_KEYS, SYNC_DIVISIONS, omit, syncedValue } from './ui/midi'
 import { matchPreset, presetControls } from './ui/presets'
@@ -443,7 +443,16 @@ export function App() {
   const panelBody = (
     <>
       <div className={styles.titleRow}>
-        <h2 className={styles.title}>Phosphene — NTSC signal path</h2>
+        <h2 className={styles.title}>
+          Phosphene
+          <button
+            className={styles.helpBtn}
+            onClick={() => setShowHelp(true)}
+            title="what is this?"
+          >
+            ?
+          </button>
+        </h2>
         <a
           className={styles.link}
           href="https://github.com/cmdcolin/phosphene"
