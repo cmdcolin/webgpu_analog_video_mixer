@@ -142,16 +142,19 @@ the compiler's job. Two consequences worth knowing:
 
 - **Four things don't compile:** `App`, `Stage`, `InputSection`, `useEngine` —
   the ref-during-render pattern above is exactly what the compiler refuses.
-  That's the accepted trade for the render loop, and it's why
-  `react-hooks/refs` is off in `eslint.config.js`. The rest of
-  eslint-plugin-react-hooks' recommended set is on and reports bail-outs.
-- **A hook's stability can be load-bearing for a component that doesn't
-  compile.** `App` holds `writeControl` from `useMidi` in an effect dep array;
-  if that closure got a fresh identity per render the effect would re-fire
-  constantly and `midi.setExternal` would reset soft-takeover every render, so a
-  physical knob could never hold its catch. It's stable only because `useMidi`
-  itself compiles. Reshape `useMidi`/`useCapture` into something the compiler
-  bails on and that breaks silently — no type error, no lint error.
+  This is harmless in itself: a bail-out means the compiler leaves that code
+  exactly as written. It's why `react-hooks/refs` is off in
+  `eslint.config.js`; the rest of eslint-plugin-react-hooks' recommended set is
+  on and reports bail-outs.
+- **What is load-bearing is that the *producer* of a callback compiles.** `App`
+  holds `writeControl` from `useMidi` in an effect dep array; if that closure
+  got a fresh identity per render the effect would re-fire constantly and
+  `midi.setExternal` would reset soft-takeover every render, so a physical knob
+  could never hold its catch. Since the hand-written `useCallback` is gone, the
+  only thing keeping it stable is `useMidi` compiling. Note the consumer's own
+  status is irrelevant — a compiled consumer still re-fires on a changed
+  identity. Reshape `useMidi`/`useCapture` into something the compiler bails on
+  and this breaks silently: no type error, no lint error.
 
 To check what compiled, build unminified and look for the memo-cache preamble:
 
