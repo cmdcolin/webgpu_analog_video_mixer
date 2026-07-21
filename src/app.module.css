@@ -1,11 +1,21 @@
 /* Minimal dark UI. Small palette, thin borders, native form controls.
-   Font/color inherit from .app; only numeric readouts use --mono. */
+   Font/color inherit from .app; only numeric readouts use --mono.
+   Colors live as tokens on :root so every CSS module (and the FatalScreen,
+   which renders outside .app) reads one palette — retheme in one place. */
+:root {
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+  --fg: #c8c8d0;
+  --accent: #7fd0a0;
+  --border: #3a3a44;
+  --panel-bg: #16161a;
+}
+
 .app {
   display: flex;
   width: 100vw;
   height: 100vh;
   background: #000;
-  color: #c8c8d0;
+  color: var(--fg);
   font-family:
     system-ui,
     -apple-system,
@@ -13,7 +23,6 @@
     Roboto,
     sans-serif;
   font-size: 12px;
-  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
 }
 
 .panel {
@@ -88,11 +97,11 @@
   cursor: pointer;
 }
 .helpBtn:hover {
-  border-color: #7fd0a0;
-  color: #7fd0a0;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .link {
-  color: #7fd0a0;
+  color: var(--accent);
   font-size: 11px;
   text-decoration: none;
 }
@@ -115,7 +124,7 @@
   user-select: none;
 }
 .head:hover {
-  color: #c8c8d0;
+  color: var(--fg);
 }
 .static,
 .static:hover {
@@ -145,7 +154,7 @@
 .filter {
   width: 100%;
   box-sizing: border-box;
-  background: #16161a;
+  background: var(--panel-bg);
   color: #d8d8e0;
   border: 1px solid #2a2a34;
   border-radius: 4px;
@@ -180,7 +189,7 @@
   flex: 1;
   background: #20202a;
   color: #d8d8e0;
-  border: 1px solid #3a3a44;
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 5px 8px;
   font: inherit;
@@ -203,8 +212,8 @@
 /* buttons */
 .btn {
   background: #26262e;
-  color: #c8c8d0;
-  border: 1px solid #3a3a44;
+  color: var(--fg);
+  border: 1px solid var(--border);
   border-radius: 3px;
   padding: 3px 8px;
   margin: 2px 3px 2px 0;
@@ -214,9 +223,13 @@
 .btn:hover {
   border-color: #5a5a68;
 }
+/* a .btn standing alone (dialog actions, close) rather than in a flowing row */
+.btnFlush {
+  margin: 0;
+}
 .active {
-  border-color: #7fd0a0;
-  color: #7fd0a0;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .edited {
   border-color: #7f7f50;
@@ -281,7 +294,7 @@
   cursor: pointer;
 }
 .hintX:hover {
-  color: #c8c8d0;
+  color: var(--fg);
 }
 /* audio input level */
 .meter {
@@ -293,7 +306,7 @@
 }
 .meterFill {
   height: 100%;
-  background: #7fd0a0;
+  background: var(--accent);
 }
 .subhead {
   font-weight: 600;
@@ -314,8 +327,8 @@
 .card {
   width: 340px;
   max-width: 90vw;
-  background: #16161a;
-  border: 1px solid #3a3a44;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 18px 20px;
 }
@@ -336,7 +349,7 @@
 .helpHead {
   font-size: 12px;
   font-weight: 700;
-  color: #7fd0a0;
+  color: var(--accent);
   margin: 0 0 4px;
 }
 .helpText {
@@ -369,7 +382,7 @@
   color: #666;
 }
 .ok {
-  color: #7fd0a0;
+  color: var(--accent);
 }
 .warn {
   color: #a08050;

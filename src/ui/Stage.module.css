@@ -28,8 +28,8 @@
   display: flex;
   align-items: center;
   background: rgba(22, 22, 26, 0.6);
-  color: #c8c8d0;
-  border: 1px solid #3a3a44;
+  color: var(--fg);
+  border: 1px solid var(--border);
   border-radius: 3px;
   padding: 4px 9px;
   font: inherit;
@@ -43,8 +43,8 @@
   top: 12px;
   right: 12px;
   background: rgba(22, 22, 26, 0.6);
-  color: #c8c8d0;
-  border: 1px solid #3a3a44;
+  color: var(--fg);
+  border: 1px solid var(--border);
   border-radius: 3px;
   padding: 2px 6px;
   font: inherit;

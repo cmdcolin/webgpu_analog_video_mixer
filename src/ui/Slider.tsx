@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { cx } from './cx'
+import { formatValue } from './format'
 import { SliderHelpDialog } from './SliderHelpDialog'
 import styles from './Slider.module.css'
 
@@ -57,9 +58,7 @@ export function Slider(props: {
             )}
           </span>
           <span className={styles.value}>
-            {props.value.toFixed(
-              props.step < 0.01 ? 3 : props.step < 1 ? 2 : 0,
-            )}
+            {formatValue(props.value, props.step)}
             {props.unit}
             {sync ? (
               <button

@@ -1,14 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import styles from '../app.module.css'
+import { readJSON, writeJSON } from './storage'
 
 // Collapsed/open choices persist per title so a reload keeps your working set.
 const STORE = 'video_feedback_sections'
-function loadOpenMap(): Partial<Record<string, boolean>> {
-  const raw = localStorage.getItem(STORE)
-  return raw === null
-    ? {}
-    : (JSON.parse(raw) as Partial<Record<string, boolean>>)
-}
+type OpenMap = Partial<Record<string, boolean>>
+const loadOpenMap = () => readJSON<OpenMap>(STORE, {})
 
 export function Section(props: {
   title: string
@@ -36,10 +33,7 @@ export function Section(props: {
     if (props.onToggle === undefined) {
       const next = !selfOpen
       setSelfOpen(next)
-      localStorage.setItem(
-        STORE,
-        JSON.stringify({ ...loadOpenMap(), [props.title]: next }),
-      )
+      writeJSON(STORE, { ...loadOpenMap(), [props.title]: next })
     } else {
       props.onToggle()
     }

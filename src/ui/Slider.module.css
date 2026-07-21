@@ -9,7 +9,7 @@
   align-items: baseline;
 }
 .value {
-  color: #7fd0a0;
+  color: var(--accent);
   font-family: var(--mono);
 }
 /* Track fills from the *default* position (--def) out to the thumb (--lo/--hi
@@ -115,7 +115,7 @@
   color: #4a4a58;
 }
 .what:hover {
-  color: #7fd0a0;
+  color: var(--accent);
 }
 .reset {
   background: none;
@@ -126,5 +126,5 @@
   color: #8888a0;
 }
 .resetDef {
-  color: #3a3a44;
+  color: var(--border);
 }

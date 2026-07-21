@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { FrameStats } from '../controls'
+import { usePersistedFlag } from './storage'
 import styles from './FpsMonitor.module.css'
 
 // Always-on rolling histogram of recent per-window fps. Each bar is one stats
@@ -17,7 +18,6 @@ function barColor(fps: number): string {
 
 // Persisted across reloads so a dismissal sticks.
 const HIDDEN_STORE = 'phosphene_fps_hidden'
-const loadHidden = (): boolean => localStorage.getItem(HIDDEN_STORE) === '1'
 
 function draw(canvas: HTMLCanvasElement, history: number[]) {
   const dpr = Math.min(window.devicePixelRatio, 2)
@@ -53,11 +53,7 @@ export function FpsMonitor(props: { stats: FrameStats; res: string }) {
   const { fps } = props.stats
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const historyRef = useRef<number[]>([])
-  const [hidden, setHidden] = useState(loadHidden)
-  const setPersistedHidden = (next: boolean) => {
-    setHidden(next)
-    localStorage.setItem(HIDDEN_STORE, next ? '1' : '0')
-  }
+  const [hidden, setHidden] = usePersistedFlag(HIDDEN_STORE)
 
   // Each new stats object is one window sample; append and redraw the histogram.
   useEffect(() => {
@@ -70,7 +66,7 @@ export function FpsMonitor(props: { stats: FrameStats; res: string }) {
     <button
       className={styles.reopen}
       style={{ background: barColor(fps) }}
-      onClick={() => setPersistedHidden(false)}
+      onClick={() => setHidden(false)}
       title={`show fps monitor (${fps.toFixed(0)} fps)`}
     />
   ) : (
@@ -81,7 +77,7 @@ export function FpsMonitor(props: { stats: FrameStats; res: string }) {
       </span>
       <button
         className={styles.dismiss}
-        onClick={() => setPersistedHidden(true)}
+        onClick={() => setHidden(true)}
         title="hide fps monitor"
       >
         ×

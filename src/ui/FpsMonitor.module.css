@@ -15,7 +15,7 @@
 .graph {
   width: 60px;
   height: 20px;
-  border: 1px solid #3a3a44;
+  border: 1px solid var(--border);
   border-radius: 3px;
 }
 .dismiss {

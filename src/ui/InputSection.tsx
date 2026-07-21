@@ -8,6 +8,7 @@ import {
   type SourceMode,
 } from '../sources/modes'
 import { Section } from './Section'
+import { SelectRow } from './SelectRow'
 
 // The YouTube option is backed by the dev-only yt-dlp bridge, so hide it in
 // production builds where the /yt endpoint doesn't exist.
@@ -18,9 +19,20 @@ const B_MODES = import.meta.env.DEV
   ? SOURCE_B_MODES
   : SOURCE_B_MODES.filter(m => m !== 'youtube')
 
+const A_OPTIONS = A_MODES.map(m => ({ value: m, label: SOURCE_DESC[m] }))
+const B_OPTIONS = B_MODES.map(m => ({ value: m, label: SOURCE_DESC[m] }))
+
 // The source-name caption shows for loaded file/YouTube sources.
 const namedMode = (m: SourceMode | SourceBMode): boolean =>
   m === 'file' || m === 'youtube'
+
+function FileName({ name }: { name: string }) {
+  return name === '' ? null : (
+    <div className={styles.fileName} title={name}>
+      {name}
+    </div>
+  )
+}
 
 export function InputSection(props: {
   sourceMode: SourceMode
@@ -40,72 +52,38 @@ export function InputSection(props: {
   return (
     <div>
       <Section title="Input" defaultOpen>
-        <div className={styles.inputRow}>
-        <span className={styles.tag} title="main source">
-          A
-        </span>
-        <select
-          className={styles.select}
+        <SelectRow
+          tag="A"
+          title="main source"
           value={props.sourceMode}
-          onChange={e => {
-            const m = SOURCE_MODES.find(x => x === e.target.value)
-            if (m !== undefined) props.onSelectSource(m)
-          }}
-        >
-          {A_MODES.map(mode => (
-            <option key={mode} value={mode}>
-              {SOURCE_DESC[mode]}
-            </option>
-          ))}
-        </select>
-      </div>
-      {namedMode(props.sourceMode) && props.sourceName !== '' ? (
-        <div className={styles.fileName} title={props.sourceName}>
-          {props.sourceName}
-        </div>
-      ) : null}
-      {props.sourceMode === 'webcam' && props.videoDevices.length > 1 ? (
-        <div className={styles.inputRow}>
-          <span className={styles.tag} title="capture device">
-            ◉
-          </span>
-          <select
-            className={styles.select}
+          options={A_OPTIONS}
+          onChange={props.onSelectSource}
+        />
+        {namedMode(props.sourceMode) ? (
+          <FileName name={props.sourceName} />
+        ) : null}
+        {props.sourceMode === 'webcam' && props.videoDevices.length > 1 ? (
+          <SelectRow
+            tag="◉"
+            title="capture device"
             value={props.webcamDeviceId}
-            onChange={e => props.onStartWebcam(e.target.value)}
-          >
-            {props.videoDevices.map((d, i) => (
-              <option key={d.deviceId} value={d.deviceId}>
-                {d.label === '' ? `Device ${i + 1}` : d.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
-      <div className={styles.inputRow}>
-        <span className={styles.tag} title="second source, mixed in dirty">
-          B
-        </span>
-        <select
-          className={styles.select}
+            options={props.videoDevices.map((d, i) => ({
+              value: d.deviceId,
+              label: d.label === '' ? `Device ${i + 1}` : d.label,
+            }))}
+            onChange={props.onStartWebcam}
+          />
+        ) : null}
+        <SelectRow
+          tag="B"
+          title="second source, mixed in dirty"
           value={props.sourceBMode}
-          onChange={e => {
-            const m = SOURCE_B_MODES.find(x => x === e.target.value)
-            if (m !== undefined) props.onSelectSourceB(m)
-          }}
-        >
-          {B_MODES.map(mode => (
-            <option key={mode} value={mode}>
-              {SOURCE_DESC[mode]}
-            </option>
-          ))}
-        </select>
-      </div>
-      {namedMode(props.sourceBMode) && props.sourceBName !== '' ? (
-        <div className={styles.fileName} title={props.sourceBName}>
-          {props.sourceBName}
-        </div>
-      ) : null}
+          options={B_OPTIONS}
+          onChange={props.onSelectSourceB}
+        />
+        {namedMode(props.sourceBMode) ? (
+          <FileName name={props.sourceBName} />
+        ) : null}
         {props.sourceBMode === 'none' ? (
           <div className={styles.hint}>
             pick a source B above to mix a second signal in.

@@ -4,7 +4,9 @@ import type { ControlKey, ModSlot } from '../controls'
 import type { ModSource } from '../signal/modstate'
 import { GROUPS, SLIDER_BY_KEY } from './controls'
 import { Section } from './Section'
+import { SelectRow } from './SelectRow'
 import { Slider } from './Slider'
+import { readJSON, writeJSON } from './storage'
 import styles from '../app.module.css'
 
 // Every slider is a bend point: flatten the groups into target options. The
@@ -28,39 +30,6 @@ const SOURCES: { value: ModSource; label: string }[] = [
   { value: 'hit', label: 'audio hit' },
 ]
 
-// The panel's tag-plus-dropdown row, shared by the target and source pickers.
-// Generic over the option values so callers get their own key type back
-// instead of a bare string to re-validate.
-function SelectRow<T extends string>(props: {
-  tag: string
-  title: string
-  value: T
-  options: readonly { value: T; label: string }[]
-  onChange: (value: T) => void
-}) {
-  return (
-    <div className={styles.inputRow}>
-      <span className={styles.tag} title={props.title}>
-        {props.tag}
-      </span>
-      <select
-        className={styles.select}
-        value={props.value}
-        onChange={e => {
-          const picked = props.options.find(o => o.value === e.target.value)
-          if (picked !== undefined) props.onChange(picked.value)
-        }}
-      >
-        {props.options.map(o => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  )
-}
-
 interface UiSlot {
   target: ControlKey | '' // '' = slot off
   source: ModSource
@@ -72,8 +41,7 @@ const N_SLOTS = 4
 const MOD_STORE = 'video_feedback_mod'
 
 function loadSlots(): UiSlot[] {
-  const raw = localStorage.getItem(MOD_STORE)
-  const stored = raw === null ? [] : (JSON.parse(raw) as UiSlot[])
+  const stored = readJSON<UiSlot[]>(MOD_STORE, [])
   const valid = stored.filter(
     s => s.target === '' || SLIDER_BY_KEY.has(s.target),
   )
@@ -104,7 +72,7 @@ export function ModSection(props: { engine: Engine | null }) {
 
   const set = (i: number, patch: Partial<UiSlot>) => {
     const next = slots.map((s, j) => (j === i ? { ...s, ...patch } : s))
-    localStorage.setItem(MOD_STORE, JSON.stringify(next))
+    writeJSON(MOD_STORE, next)
     setSlots(next)
   }
   return (

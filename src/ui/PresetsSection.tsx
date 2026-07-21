@@ -2,8 +2,10 @@ import { useRef, useState, type CSSProperties } from 'react'
 import type { Controls } from '../controls'
 import styles from '../app.module.css'
 import { cx } from './cx'
+import { Dialog } from './Dialog'
 import { BulbIcon } from './icons'
 import { Section } from './Section'
+import { usePersistedFlag } from './storage'
 import {
   matchPreset,
   PRESETS,
@@ -36,44 +38,23 @@ const HINT_STORE = 'video_feedback_preset_hint_dismissed'
 // stays on hover.
 function PresetsHelpDialog(props: { onClose: () => void }) {
   return (
-    <div
-      className={styles.backdrop}
-      onClick={props.onClose}
-      onKeyDown={e => {
-        if (e.key === 'Escape') props.onClose()
-      }}
-    >
-      <div className={styles.card} onClick={e => e.stopPropagation()}>
-        <div className={styles.cardRow}>
-          <h2 className={styles.h2}>Presets</h2>
-          <button
-            className={styles.btn}
-            style={{ margin: 0 }}
-            autoFocus
-            onClick={props.onClose}
-          >
-            close
-          </button>
-        </div>
-        <p className={styles.helpText}>
-          Each preset is a named look — a bundle of control settings that
-          recreates a particular signal fault or device. Hover one for what it
-          does.
-        </p>
-        <p className={styles.helpText}>
-          Every preset is also a fader: click to dial it fully in, or drag
-          sideways for a partial amount. Either way it layers onto what’s
-          already there rather than replacing it, and the fill shows how much is
-          in — so stacking several accumulates their faults. “clean” clears them
-          all.
-        </p>
-        <div className={styles.muted}>
-          A mix lasts only until something else moves the look — a slider,
-          mutate, a scene — and then the fills reset, since a blended look can’t
-          be traced back to exact amounts.
-        </div>
+    <Dialog title="Presets" onClose={props.onClose}>
+      <p className={styles.helpText}>
+        Each preset is a named look — a bundle of control settings that recreates
+        a particular signal fault or device. Hover one for what it does.
+      </p>
+      <p className={styles.helpText}>
+        Every preset is also a fader: click to dial it fully in, or drag sideways
+        for a partial amount. Either way it layers onto what’s already there
+        rather than replacing it, and the fill shows how much is in — so stacking
+        several accumulates their faults. “clean” clears them all.
+      </p>
+      <div className={styles.muted}>
+        A mix lasts only until something else moves the look — a slider, mutate, a
+        scene — and then the fills reset, since a blended look can’t be traced
+        back to exact amounts.
       </div>
-    </div>
+    </Dialog>
   )
 }
 
@@ -151,13 +132,7 @@ export function PresetsSection(props: {
   onUndo: () => void
 }) {
   const [showHelp, setShowHelp] = useState(false)
-  const [hintDismissed, setHintDismissed] = useState(
-    () => localStorage.getItem(HINT_STORE) === '1',
-  )
-  const dismissHint = () => {
-    localStorage.setItem(HINT_STORE, '1')
-    setHintDismissed(true)
-  }
+  const [hintDismissed, setHintDismissed] = usePersistedFlag(HINT_STORE)
   const active = matchPreset(props.controls)
   const presetCaption = active
     ? active.blurb
@@ -195,7 +170,7 @@ export function PresetsSection(props: {
             className={styles.hintX}
             title="dismiss this hint"
             aria-label="dismiss hint"
-            onClick={dismissHint}
+            onClick={() => setHintDismissed(true)}
           >
             ×
           </button>
