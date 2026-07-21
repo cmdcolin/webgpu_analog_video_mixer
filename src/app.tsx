@@ -111,6 +111,10 @@ export function App() {
   // Preset mix: how much of each preset is dialed in, over the look that was
   // live when the mixing started. The engine still owns the controls — this is
   // the recipe that produced them, kept only so a weight can be dragged back.
+  // Deliberately not persisted to scenes or the URL: those store the resolved
+  // controls, which are version-stable, whereas a recipe binds to preset names
+  // and patches that drift as presets are retuned. A recalled look can still be
+  // re-mixed — startMix rebaselines from whatever is live.
   const [mix, setMix] = useState<{ base: Controls; weights: PresetWeights }>(
     () => ({ base: DEFAULT_CONTROLS, weights: new Map() }),
   )
