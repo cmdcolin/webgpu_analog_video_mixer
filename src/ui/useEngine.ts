@@ -78,6 +78,19 @@ export function useEngine() {
   const [reverb, setReverb] = useState(REVERB_DEFAULT)
   const [videoA, setVideoA] = useState(false)
   const [videoB, setVideoB] = useState(false)
+  // The loaded YouTube URL per slot, kept so the source round-trips through the
+  // query string (a refresh or shared link restores the clip).
+  const [ytUrlA, setYtUrlA] = useState('')
+  const [ytUrlB, setYtUrlB] = useState('')
+  // makeVideo stamps the current playback config onto each new element, but it
+  // runs inside async fetch callbacks and the mount-time restore, where the
+  // state it would close over is stale; this mirror always holds the latest.
+  const vaporRef = useRef({
+    speedA: SPEED_DEFAULT,
+    speedB: SPEED_DEFAULT,
+    playAudio: false,
+    reverb: REVERB_DEFAULT,
+  })
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
   const [webcamDeviceId, setWebcamDeviceId] = useState('')
   const [sourceBMode, setSourceBMode] = useState<SourceBMode>('none')
@@ -126,6 +139,7 @@ export function useEngine() {
   }
 
   const changeSpeedA = (rate: number) => {
+    vaporRef.current.speedA = rate
     setSpeedA(rate)
     const v = videoRef.current
     if (v !== null) {
@@ -134,6 +148,7 @@ export function useEngine() {
     }
   }
   const changeSpeedB = (rate: number) => {
+    vaporRef.current.speedB = rate
     setSpeedB(rate)
     const v = videoBRef.current
     if (v !== null) {
@@ -143,18 +158,21 @@ export function useEngine() {
   }
   const toggleAudio = () => {
     const on = !playAudio
+    vaporRef.current.playAudio = on
     setPlayAudio(on)
     routeAudio(on, reverb)
   }
   const changeReverb = (mix: number) => {
+    vaporRef.current.reverb = mix
     setReverb(mix)
     engineRef.current?.audioState.setReverbMix(mix)
   }
-  // The vaporwave preset: slow both slots, dial in reverb, play out loud.
+  // The vaporwave preset: slow both slots, dial in reverb, force audio on.
   const applyVaporwave = () => {
     changeSpeedA(VAPORWAVE_SPEED)
     changeSpeedB(VAPORWAVE_SPEED)
-    setReverb(REVERB_DEFAULT)
+    changeReverb(REVERB_DEFAULT)
+    vaporRef.current.playAudio = true
     setPlayAudio(true)
     routeAudio(true, REVERB_DEFAULT)
   }
@@ -172,6 +190,7 @@ export function useEngine() {
       engineRef.current?.audioState.releaseMedia(v)
     }
     setVideoA(false)
+    setYtUrlA('')
     engineRef.current?.setVideoSource(null)
   }
 
@@ -195,7 +214,7 @@ export function useEngine() {
     // preservesPitch off means slowing the rate drops the pitch — the whole
     // point. defaultPlaybackRate too, or loading the src resets playbackRate to
     // 1. muted stays true until routeMedia adopts the element for output.
-    const rate = isB ? speedB : speedA
+    const rate = isB ? vaporRef.current.speedB : vaporRef.current.speedA
     v.preservesPitch = false
     v.defaultPlaybackRate = rate
     v.playbackRate = rate
@@ -204,7 +223,7 @@ export function useEngine() {
     else setVideoA(true)
     // A fresh clip is a new element the audio graph hasn't adopted; re-route so
     // it's captured (and slowed audio keeps playing) when playback audio is on.
-    routeAudio(playAudio, reverb)
+    routeAudio(vaporRef.current.playAudio, vaporRef.current.reverb)
     return v
   }
 
@@ -306,6 +325,7 @@ export function useEngine() {
       stopVideo()
       setError('')
       setSourceMode('youtube')
+      setYtUrlA(trimmed)
       setSourceName(`youtube: ${ytId(trimmed)} — downloading…`)
       fetchYouTube(trimmed).then(
         blob => {
@@ -331,6 +351,7 @@ export function useEngine() {
       stopVideoB()
       setError('')
       setSourceBMode('youtube')
+      setYtUrlB(trimmed)
       setSourceBName(`youtube: ${ytId(trimmed)} — downloading…`)
       engine.setSourceBEnabled(true)
       fetchYouTube(trimmed).then(
@@ -362,6 +383,7 @@ export function useEngine() {
       engineRef.current?.audioState.releaseMedia(v)
     }
     setVideoB(false)
+    setYtUrlB('')
     engineRef.current?.setVideoSourceB(null)
   }
 
@@ -511,6 +533,29 @@ export function useEngine() {
               setSourceMode('file')
               setSourceName(urlName(vurl))
             }
+            // Vaporwave + YouTube round-trip: apply the speeds/reverb before
+            // loading, so the restored clips (makeVideo reads vaporRef) start
+            // already slowed. Audio is left off — browsers block unmuted
+            // autoplay without a gesture, so the clip must load muted; the user
+            // re-enables sound with one click on the panel toggle.
+            const num = (key: string, fallback: number) => {
+              const raw = q.get(key)
+              const n = raw === null ? fallback : Number(raw)
+              return Number.isFinite(n) ? n : fallback
+            }
+            vaporRef.current = {
+              speedA: num('speeda', SPEED_DEFAULT),
+              speedB: num('speedb', SPEED_DEFAULT),
+              reverb: num('reverb', REVERB_DEFAULT),
+              playAudio: false,
+            }
+            setSpeedA(vaporRef.current.speedA)
+            setSpeedB(vaporRef.current.speedB)
+            setReverb(vaporRef.current.reverb)
+            const yt = q.get('yt')
+            if (yt !== null) loadYouTube(yt)
+            const ytb = q.get('ytb')
+            if (ytb !== null) loadYouTubeB(ytb)
             if (q.has('debug')) console.log('DEBUG engine ready')
           }
         },
@@ -572,6 +617,8 @@ export function useEngine() {
     speedB,
     playAudio,
     reverb,
+    ytUrlA,
+    ytUrlB,
     changeSpeedA,
     changeSpeedB,
     toggleAudio,

@@ -3,7 +3,13 @@ import type { RefObject } from 'react'
 import type { Engine } from '../gpu/pipeline'
 import type { ControlKey, Controls } from '../controls'
 import { createMidi } from './midi'
-import type { BindingMap, MidiManager, MidiStatus } from './midi'
+import type {
+  BindingMap,
+  DeviceProfile,
+  LearnState,
+  MidiManager,
+  MidiStatus,
+} from './midi'
 
 // Owns the MIDI manager (an imperative Web MIDI subsystem living outside React)
 // and the single control-write path. Every store-origin change must reach two
@@ -14,6 +20,7 @@ export function useMidi(engineRef: RefObject<Engine | null>) {
   const [status, setStatus] = useState<MidiStatus>('idle')
   const [bindings, setBindings] = useState<BindingMap>({})
   const [armedKey, setArmedKey] = useState<ControlKey | null>(null)
+  const [learn, setLearn] = useState<LearnState | null>(null)
   const [bpm, setBpm] = useState<number | null>(null)
 
   useEffect(() => {
@@ -26,6 +33,7 @@ export function useMidi(engineRef: RefObject<Engine | null>) {
       onStatus: setStatus,
       onBindings: setBindings,
       onArmed: setArmedKey,
+      onLearn: setLearn,
       onTempo: setBpm,
     })
     midiRef.current = midi
@@ -66,6 +74,7 @@ export function useMidi(engineRef: RefObject<Engine | null>) {
     status,
     bindings,
     armedKey,
+    learn,
     bpm,
     writeControl,
     writeControls,
@@ -74,6 +83,9 @@ export function useMidi(engineRef: RefObject<Engine | null>) {
     toggleArm: (key: ControlKey) =>
       midiRef.current?.arm(armedKey === key ? null : key),
     disarm: () => midiRef.current?.arm(null),
+    autoMap: (profile: DeviceProfile) => midiRef.current?.autoMap(profile),
+    learnSequence: () => midiRef.current?.learnSequence(),
+    stopLearn: () => midiRef.current?.stopLearn(),
     clearBinding: (key: ControlKey) => midiRef.current?.clearBinding(key),
     clearAll: () => midiRef.current?.clearAll(),
   }

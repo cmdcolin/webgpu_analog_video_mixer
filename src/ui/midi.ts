@@ -1,5 +1,5 @@
 import type { ControlKey } from '../controls'
-import { SLIDER_BY_KEY } from './controls'
+import { AUTOMAP_KEYS, SLIDER_BY_KEY } from './controls'
 import type { SliderDef } from './controls'
 
 // One CC source = a (channel, controller) pair. Channel is kept so two knobs
@@ -10,6 +10,42 @@ export interface MidiBinding {
 }
 
 export type BindingMap = Partial<Record<ControlKey, MidiBinding>>
+
+// A controller's factory layout, as the CC number each physical knob sends, in
+// the order they should take controls. `ccs` is explicit (not a base+count)
+// because real layouts stripe knobs across non-contiguous CC ranges. A device
+// that banks knobs on-hardware (e.g. the MIDI Fighter Twister's 4 banks) just
+// lists every bank's CC — the app sees banks as more distinct knobs, no
+// bank-switch logic needed here.
+export interface DeviceProfile {
+  name: string
+  channel: number
+  ccs: number[]
+}
+
+// One entry per knob (16 encoders × 4 on-device banks), factory-default CC 0..63
+// on channel 1. Turning any bank on the box just changes which of these a knob
+// sends, so the app maps a control to every slot up front.
+const twisterCcs: number[] = []
+for (let i = 0; i < 64; i++) twisterCcs.push(i)
+
+export const DEVICE_PROFILES: DeviceProfile[] = [
+  { name: 'MIDI Fighter Twister', channel: 0, ccs: twisterCcs },
+]
+
+export interface AutoMapResult {
+  mapped: number
+  total: number
+}
+
+// Live progress of a "learn in order" sweep: bind each control down the spine
+// to whichever knob the user moves next. `nextKey` is the control still waiting
+// for a knob, or null once every slot is filled.
+export interface LearnState {
+  done: number
+  total: number
+  nextKey: ControlKey | null
+}
 
 export type MidiStatus =
   'unsupported' | 'idle' | 'requesting' | 'ready' | 'denied'
@@ -80,6 +116,14 @@ export function syncedValue(
 export interface MidiManager {
   enable: () => void
   arm: (key: ControlKey | null) => void
+  // Replace all bindings with a device's factory layout: each knob CC takes the
+  // next control along the auto-map spine. Returns how many controls got a knob.
+  autoMap: (profile: DeviceProfile) => AutoMapResult
+  // Device-agnostic bulk bind: start from a clean slate, then bind the next
+  // control down the spine to each fresh knob the user moves. Works for any
+  // controller regardless of its CC layout.
+  learnSequence: () => void
+  stopLearn: () => void
   clearBinding: (key: ControlKey) => void
   clearAll: () => void
   // Report a value set from outside MIDI (slider drag, preset, slot). Drops
@@ -93,6 +137,8 @@ export interface MidiCallbacks {
   onStatus: (status: MidiStatus) => void
   onBindings: (bindings: BindingMap) => void
   onArmed: (key: ControlKey | null) => void
+  // Progress of a learn-in-order sweep, or null when none is running.
+  onLearn: (state: LearnState | null) => void
   // Detected clock tempo, or null when no clock is running.
   onTempo: (bpm: number | null) => void
 }
@@ -101,6 +147,11 @@ export function createMidi(cb: MidiCallbacks): MidiManager {
   let bindings = loadBindings()
   let armed: ControlKey | null = null
   let access: MIDIAccess | null = null
+  // Active learn-in-order sweep: the spine of keys to fill, how far along we
+  // are, and the knob sources already claimed (so one knob's stream of messages
+  // binds a single control, not the whole row).
+  let learn: { keys: ControlKey[]; index: number; seen: Set<string> } | null =
+    null
   const keyByBinding = new Map<string, ControlKey>()
 
   // Soft-takeover bookkeeping, keyed by control.
@@ -151,6 +202,18 @@ export function createMidi(cb: MidiCallbacks): MidiManager {
     cb.onBindings({ ...bindings })
   }
 
+  const reportLearn = () => {
+    cb.onLearn(
+      learn === null
+        ? null
+        : {
+            done: learn.index,
+            total: learn.keys.length,
+            nextKey: learn.keys[learn.index] ?? null,
+          },
+    )
+  }
+
   const bind = (key: ControlKey, b: MidiBinding) => {
     // A CC drives one control at a time: drop whoever held this source before.
     const prev = keyByBinding.get(bindingId(b))
@@ -193,13 +256,24 @@ export function createMidi(cb: MidiCallbacks): MidiManager {
     // Control Change is status 0xB0..0xBF; three bytes: status, controller, value.
     if (data?.length === 3 && (data[0] & 0xf0) === 0xb0) {
       const b = { channel: data[0] & 0x0f, controller: data[1] }
-      if (armed === null) {
-        const key = keyByBinding.get(bindingId(b))
-        if (key !== undefined) drive(key, data[2])
-      } else {
+      const id = bindingId(b)
+      if (learn !== null) {
+        // A knob already claimed this sweep keeps streaming as it turns — only a
+        // fresh source advances to the next control.
+        if (!learn.seen.has(id)) {
+          learn.seen.add(id)
+          bind(learn.keys[learn.index], b)
+          learn.index += 1
+          if (learn.index >= learn.keys.length) learn = null
+          reportLearn()
+        }
+      } else if (armed !== null) {
         bind(armed, b)
         armed = null
         cb.onArmed(null)
+      } else {
+        const key = keyByBinding.get(id)
+        if (key !== undefined) drive(key, data[2])
       }
     }
   }
@@ -236,6 +310,38 @@ export function createMidi(cb: MidiCallbacks): MidiManager {
     arm: key => {
       armed = key
       cb.onArmed(key)
+    },
+    autoMap: profile => {
+      const n = Math.min(profile.ccs.length, AUTOMAP_KEYS.length)
+      const next: BindingMap = {}
+      for (let i = 0; i < n; i++)
+        next[AUTOMAP_KEYS[i]] = {
+          channel: profile.channel,
+          controller: profile.ccs[i],
+        }
+      bindings = next
+      engaged.clear()
+      lastCc.clear()
+      reindex()
+      persist()
+      return { mapped: n, total: AUTOMAP_KEYS.length }
+    },
+    learnSequence: () => {
+      armed = null
+      cb.onArmed(null)
+      learn = { keys: AUTOMAP_KEYS, index: 0, seen: new Set() }
+      bindings = {}
+      engaged.clear()
+      lastCc.clear()
+      reindex()
+      persist()
+      reportLearn()
+    },
+    stopLearn: () => {
+      if (learn !== null) {
+        learn = null
+        reportLearn()
+      }
     },
     clearBinding: key => {
       bindings = omit(bindings, key)

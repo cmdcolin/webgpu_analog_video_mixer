@@ -13,15 +13,28 @@ export interface SliderDef {
   help: string
 }
 
+// The signal-path stages, in the order the panel's spine is browsed. A group
+// placed on one of these renders in that stage.
+export const PHASE_ORDER = [
+  'Source',
+  'Feedback',
+  'Tape',
+  'Receiver',
+  'Screen',
+] as const
+export type Phase = (typeof PHASE_ORDER)[number]
+
+// Where a group lives in the panel — its single source of placement truth, so
+// nothing can silently fail to render:
+//   a Phase — in that stage of the browsable signal-path spine;
+//   'ab'    — in the A/B Mix section, shown only when source B is on;
+//   'audio' — inside the Audio section, next to its enable button.
+export type Placement = Phase | 'ab' | 'audio'
+
 export interface Group {
   name: string
+  place: Placement
   sliders: SliderDef[]
-  // Audio group: rendered inside the Audio section next to the enable button,
-  // not in the generic list.
-  audio?: boolean
-  // A/B mix groups: surfaced next to the Input row when source B is on,
-  // rather than buried in the generic group list at the bottom.
-  ab?: boolean
 }
 
 export const GROUPS: Group[] = [
@@ -1140,3 +1153,13 @@ export const PHASES: { name: string; groups: string[] }[] = [
 export const SLIDER_BY_KEY = new Map<ControlKey, SliderDef>(
   GROUPS.flatMap(g => g.sliders).map(s => [s.key, s]),
 )
+
+// Controls in auto-map priority order: the signal-path spine first, then the
+// contextual A/B and audio groups. A controller has far fewer knobs than there
+// are controls, so its low banks should land on the always-visible spine before
+// spilling into groups that only appear in a mode.
+export const AUTOMAP_KEYS: ControlKey[] = [
+  ...GROUPS.filter(g => g.ab !== true && g.audio !== true),
+  ...GROUPS.filter(g => g.ab === true),
+  ...GROUPS.filter(g => g.audio === true),
+].flatMap(g => g.sliders.map(s => s.key))

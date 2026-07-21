@@ -41,6 +41,10 @@ const subscribeNever = () => () => {}
 const getDefaultControls = (): Controls => DEFAULT_CONTROLS
 
 const AUDIO_GROUP = GROUPS.find(g => g.audio === true)
+// A/B mix groups get their own section below Input when source B is on, rather
+// than swelling the Input row in place (which shoves the presets down the panel
+// and reads as if their order changed).
+const AB_GROUPS = GROUPS.filter(g => g.ab === true)
 // The main groups arranged by signal-path phase — the spine the panel is
 // browsed along. PHASES names the stages; resolve each to its group object.
 const GROUP_BY_NAME = new Map(GROUPS.map(g => [g.name, g]))
@@ -103,6 +107,10 @@ export function App() {
     enable: enableMidi,
     toggleArm,
     disarm,
+    autoMap,
+    learn,
+    learnSequence,
+    stopLearn,
     clearBinding,
     clearAll,
   } = useMidi(engineRef)
@@ -278,6 +286,7 @@ export function App() {
         setShowHelp(false)
         setFilter('')
         disarm()
+        stopLearn()
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         if (undoSnapshot !== null) {
           e.preventDefault()
@@ -424,6 +433,11 @@ export function App() {
     engineReady: eng.engine !== null,
     sourceMode: eng.sourceMode,
     sourceBMode: eng.sourceBMode,
+    ytUrlA: eng.ytUrlA,
+    ytUrlB: eng.ytUrlB,
+    speedA: eng.speedA,
+    speedB: eng.speedB,
+    reverb: eng.reverb,
   })
 
   const audio = useAudio(eng.engine)
@@ -534,8 +548,16 @@ export function App() {
         fileInputBRef={eng.fileInputBRef}
         onFile={eng.onFile}
         onFileB={eng.onFileB}
-        renderGroup={renderGroup}
       />
+
+      {eng.sourceBMode === 'none' ? null : (
+        <Section title="A/B Mix" defaultOpen>
+          {/* Primary mixer open, alternative compositors (wipe, PiP) collapsed,
+              so enabling B surfaces the mix controls without unfurling every
+              slider at once. */}
+          {AB_GROUPS.map((group, i) => renderGroup(group, i === 0))}
+        </Section>
+      )}
 
       <PresetsSection
         controls={controls}
@@ -632,8 +654,12 @@ export function App() {
       {midiStatus === 'ready' ? (
         <MidiSection
           armedKey={armedKey}
+          learn={learn}
           midiBindings={midiBindings}
           bpm={bpm}
+          onAutoMap={autoMap}
+          onLearnSequence={learnSequence}
+          onStopLearn={stopLearn}
           onClearBinding={clearBinding}
           onClearAll={clearAll}
         />
