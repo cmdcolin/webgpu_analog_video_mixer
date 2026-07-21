@@ -11,6 +11,7 @@ import {
   SAMPLE_RATE,
   usToSamples,
 } from './constants'
+import { Wow } from './noise'
 
 const F_UNDER = (40 * FSC) / 227.5 // 629.37 kHz color-under carrier
 const F_DOWN = FSC - F_UNDER // heterodyne frequency
@@ -30,17 +31,18 @@ export class LineState {
   private flutter = 0
   private underWalk = 0
   private t = 0
+  private wow = new Wow()
 
   update(c: LineStateControls, frame: number): Float32Array<ArrayBuffer> {
     this.t += 1 / 60
-    const wowPhase = 2 * Math.PI * (0.6 * this.t)
+    this.wow.advance(1 / 60)
     for (let row = 0; row < LINES; row++) {
       // flutter: random walk with a restoring pull, advanced per line
       this.flutter +=
         (Math.random() - 0.5) * usToSamples(c.tbJitterNs * 1e-3) * 0.7
       this.flutter *= 0.995
-      const wow =
-        usToSamples(c.tbWowNs * 1e-3) * Math.sin(wowPhase + (row / LINES) * 0.9)
+      // wow: quasi-periodic wander of the rotating parts, never a naked sine
+      const wow = usToSamples(c.tbWowNs * 1e-3) * this.wow.at(this.t, row / LINES)
       const headSwitched = row >= HEAD_SWITCH_LINE
       const hs = headSwitched ? usToSamples(c.headSwitchShiftUs) : 0
 

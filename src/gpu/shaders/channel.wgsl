@@ -102,10 +102,13 @@ fn main(
 
   // 4.5 MHz FM sound carrier leaking past the trap. It is exactly 286
   // cycles/line (fH = 4.5MHz/286), i.e. 11/35 of the sample rate, so the
-  // weave is stationary until the audio FM (buzz) moves it.
+  // weave is stationary until the audio FM moves it. Intercarrier buzz *is*
+  // that FM leaking past the trap, so drive it from the program audio: the
+  // carrier deviates with content — aperiodic for free — and silence leaves a
+  // clean stationary weave rather than a coupled-to-nothing sweep.
   if (P.soundIre > 0.0) {
     let ph = f32((11u * s) % 35u) / 35.0;
-    let buzz = 2.2 * sin(2.0 * PI * (f32(row) / 262.5 + 0.011 * f32(P.frame)));
+    let buzz = 2.2 * audio[row];
     out = out + P.soundIre * sin(2.0 * PI * ph + buzz);
   }
 

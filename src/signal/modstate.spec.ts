@@ -53,6 +53,39 @@ describe('ModState', () => {
     expect(out).toEqual([0.3, 0.9])
   })
 
+  it('sample & hold latches a stepped value once per cycle', () => {
+    const m = new ModState()
+    const wave = [{ source: 'hold', rateHz: 1 } as const]
+    // held value only changes on the cycle wrap, so within a cycle it is flat
+    const a = step(m, wave, 20, () => 0.75)
+    const b = step(m, wave, 10, () => 0.75)
+    expect(a[0]).toBe(b[0]) // still inside the same held step
+    expect(a[0]).toBeGreaterThanOrEqual(-1)
+    expect(a[0]).toBeLessThanOrEqual(1)
+  })
+
+  it('smooth noise is bounded and continuous', () => {
+    const m = new ModState()
+    const wave = [{ source: 'smooth', rateHz: 3 } as const]
+    let prev = m.update(wave, 0, 0)[0]
+    for (let i = 0; i < 200; i++) {
+      const v = m.update(wave, 0, 0)[0]
+      expect(Math.abs(v)).toBeLessThanOrEqual(1)
+      expect(Math.abs(v - prev)).toBeLessThan(0.5) // no jumps
+      prev = v
+    }
+  })
+
+  it('lorenz stays bounded and is aperiodic', () => {
+    const m = new ModState()
+    const wave = [{ source: 'lorenz', rateHz: 4 } as const]
+    const vals = Array.from({ length: 400 }, () => m.update(wave, 0, 0)[0])
+    expect(Math.max(...vals.map(Math.abs))).toBeLessThanOrEqual(1)
+    // never settles: the second half keeps moving as much as the first
+    const spread = (a: number[]) => Math.max(...a) - Math.min(...a)
+    expect(spread(vals.slice(200))).toBeGreaterThan(0.3)
+  })
+
   it('tracks independent phase per slot', () => {
     const m = new ModState()
     const waves = [

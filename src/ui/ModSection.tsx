@@ -21,6 +21,9 @@ const SOURCES: { value: ModSource; label: string }[] = [
   { value: 'sine', label: 'sine LFO' },
   { value: 'triangle', label: 'triangle LFO' },
   { value: 'walk', label: 'random walk' },
+  { value: 'smooth', label: 'smooth noise' },
+  { value: 'hold', label: 'sample & hold' },
+  { value: 'lorenz', label: 'lorenz chaos' },
   { value: 'level', label: 'audio level' },
   { value: 'hit', label: 'audio hit' },
 ]
