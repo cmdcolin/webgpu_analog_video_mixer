@@ -1,7 +1,7 @@
 // Camera-at-monitor feedback: the previous frame's CRT face (faceTex, the
 // glowing screen from crt_face — not the raw decode) is re-photographed through
 // a camera model — affine reframe, lens defocus + vignette, then the sensor's
-// black cut and s-curve (AGC knee) — and mixed with the live source.
+// black cut and full-well saturation — and mixed with the live source.
 // The nonlinearity is what makes the loop organic: bright cores bloom, dim
 // trails decay into black instead of hovering as gray copies. The result is
 // the encoder input, so every generation traverses the full analog chain.
@@ -83,10 +83,18 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     fb = cam(fuv) * P.fbGain;
     // lens vignette, in sensor coordinates
     fb = fb * max(1.0 - P.fbVign * 1.45 * dot(rel0, rel0), 0.0);
-    // sensor black cut, then s-curve
+    // sensor black cut, then full-well saturation
     fb = max(fb - vec3f(P.fbBlack), vec3f(0.0)) / (1.0 - P.fbBlack);
-    let t = clamp(fb, vec3f(0.0), vec3f(1.0));
-    fb = mix(fb, t * t * (3.0 - 2.0 * t), P.fbKnee);
+    // A photosite has a finite well: highlights roll into a shoulder and
+    // asymptote at clip, they never gain past it. That falling gain is what
+    // stabilizes the loop — once the fed-back level climbs into the shoulder the
+    // round-trip gain drops below unity, so a loop that would otherwise run away
+    // settles into a bright fixed point instead of pinning the whole raster
+    // white. fbKnee sets where the well starts to fill: 0 is a hard clip (no
+    // shoulder, the loop can still white out), 1 rolls off early and gently.
+    let knee = mix(1.0, 0.3, clamp(P.fbKnee, 0.0, 1.0));
+    let over = max(fb - vec3f(knee), vec3f(0.0));
+    fb = min(fb, vec3f(knee)) + (1.0 - knee) * over / (1.0 - knee + over);
   }
   let outc = mix(src, fb, P.fbMix);
   textureStore(inputTex, vec2i(gid.xy), vec4f(outc, 1.0));
