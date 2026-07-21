@@ -32,7 +32,7 @@ export function YouTubeDialog(props: {
           placeholder="https://youtube.com/watch?v=…"
           value={url}
           onChange={e => setUrl(e.target.value)}
-          autoFocus
+          data-autofocus
         />
         <button className={cx(styles.btn, styles.btnFlush)} type="submit">
           Load

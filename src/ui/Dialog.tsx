@@ -2,55 +2,45 @@ import { useEffect, useId, useRef, type ReactNode } from 'react'
 import styles from '../app.module.css'
 import { cx } from './cx'
 
-// Shared modal shell: a dimmed backdrop that closes on outside click or Escape,
-// a centered card, and a title row with a close button. Escape and focus are
-// bound to the dialog's own document, so it also works when the panel lives in
-// the popout window — a listener on the main window would never see the key.
+// Shared modal shell built on the native <dialog> element: showModal() puts it
+// in the top layer (no z-index juggling), traps focus, makes the rest of the
+// page inert, and turns Escape into a `cancel` event — all for free. The card is
+// an inner box so a click lands on the backdrop (the dialog element itself) only
+// when it misses the card. Opens in whichever document it's portaled into, so it
+// works in the popout window too.
 export function Dialog(props: {
   title: ReactNode
   onClose: () => void
   wide?: boolean
   children: ReactNode
 }) {
-  const cardRef = useRef<HTMLDivElement>(null)
+  const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const { onClose } = props
 
   useEffect(() => {
-    const doc = cardRef.current?.ownerDocument
-    if (doc === undefined) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    doc.addEventListener('keydown', onKey)
-    return () => doc.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  // Pull focus into the dialog on open — unless it already holds an autofocused
-  // field (e.g. the YouTube URL box) — and hand it back to whatever the trigger
-  // was on close, so keyboard users aren't dropped at the top of the document.
-  useEffect(() => {
-    const card = cardRef.current
-    if (card === null) return
-    const doc = card.ownerDocument
-    const restore = doc.activeElement
-    if (!card.contains(doc.activeElement)) card.focus()
+    const el = ref.current
+    if (el === null) return
+    el.showModal()
+    // showModal focuses the first tabbable (the close button); honor an opt-in
+    // field that would rather have it, like the YouTube URL box.
+    el.querySelector<HTMLElement>('[data-autofocus]')?.focus()
     return () => {
-      if (restore instanceof HTMLElement) restore.focus()
+      if (el.open) el.close()
     }
   }, [])
 
   return (
-    <div className={styles.backdrop} onClick={onClose}>
-      <div
-        ref={cardRef}
-        className={cx(styles.card, props.wide === true && styles.cardWide)}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onClick={e => e.stopPropagation()}
-      >
+    <dialog
+      ref={ref}
+      className={styles.modal}
+      aria-labelledby={titleId}
+      onCancel={onClose}
+      onClick={e => {
+        if (e.target === ref.current) onClose()
+      }}
+    >
+      <div className={cx(styles.card, props.wide === true && styles.cardWide)}>
         <div className={styles.cardRow}>
           <h2 id={titleId} className={styles.h2}>
             {props.title}
@@ -61,6 +51,6 @@ export function Dialog(props: {
         </div>
         {props.children}
       </div>
-    </div>
+    </dialog>
   )
 }

@@ -314,15 +314,19 @@
   margin: 0 0 4px;
 }
 
-/* dialogs */
-.backdrop {
-  position: fixed;
-  inset: 0;
+/* dialogs — native <dialog>, centered in the top layer. Strip the UA chrome
+   (border/padding/opaque background/text color) back to a transparent wrapper
+   around the card, and dim the page behind it via ::backdrop. */
+.modal {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  max-width: 100vw;
+  max-height: 100dvh;
+}
+.modal::backdrop {
   background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
 }
 .card {
   width: 340px;
@@ -331,10 +335,6 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 18px 20px;
-}
-/* focused programmatically on open (never a Tab stop), so no ring */
-.card:focus {
-  outline: none;
 }
 .cardWide {
   width: 460px;
