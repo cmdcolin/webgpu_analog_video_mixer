@@ -18,6 +18,9 @@ export function Section(props: {
   forceOpen?: boolean
   // Some control inside sits off its default.
   dot?: boolean
+  // Optional accessory (e.g. a ? explainer) beside the title. It must stop its
+  // own clicks from bubbling, or they toggle the section.
+  help?: ReactNode
 }) {
   const [open, setOpen] = useState(
     () => loadOpenMap()[props.title] ?? props.defaultOpen ?? true,
@@ -37,6 +40,7 @@ export function Section(props: {
         <span>
           {props.title}
           {props.dot === true ? <span className={styles.dot}> •</span> : null}
+          {props.help}
         </span>
         <span className={styles.caret}>{shown ? '▾' : '▸'}</span>
       </h3>

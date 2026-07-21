@@ -1,3 +1,4 @@
+import { useRef, useState, type CSSProperties } from 'react'
 import type { Controls } from '../controls'
 import styles from '../app.module.css'
 import { cx } from './cx'
@@ -21,11 +22,55 @@ const PRESET_GROUPS = PRESETS.reduce<{ name: string; defs: typeof PRESETS }[]>(
   [],
 )
 
-// Each preset is an apply button plus its own weight slider: click the name for
-// the look outright, drag the slider to mix that preset into the current look.
-// The slider reads empty whenever the live look no longer matches the mix (see
-// liveWeights in app.tsx), so it never shows a level that isn't in effect.
-function PresetRow(props: {
+// Click applies the preset outright; dragging sideways past a few pixels turns
+// the button into a weight slider, mixing that preset onto the current look.
+const DRAG_SLOP = 4
+
+// The one explainer for the whole feature (behind the ? by the section title),
+// so the compact chips carry no per-preset help of their own — each chip's blurb
+// stays on hover.
+function PresetsHelpDialog(props: { onClose: () => void }) {
+  return (
+    <div
+      className={styles.backdrop}
+      onClick={props.onClose}
+      onKeyDown={e => {
+        if (e.key === 'Escape') props.onClose()
+      }}
+    >
+      <div className={styles.card} onClick={e => e.stopPropagation()}>
+        <div className={styles.cardRow}>
+          <h2 className={styles.h2}>Presets</h2>
+          <button
+            className={styles.btn}
+            style={{ margin: 0 }}
+            autoFocus
+            onClick={props.onClose}
+          >
+            close
+          </button>
+        </div>
+        <p className={styles.helpText}>
+          Each preset is a named look — a bundle of control settings that
+          recreates a particular signal fault or device. Click one to apply it
+          outright; hover for what it does.
+        </p>
+        <p className={styles.helpText}>
+          Every preset doubles as a slider: drag it sideways to mix that look
+          part-way into the current one instead of replacing it, and the fill
+          shows how much is in. Stacking several accumulates their faults.
+        </p>
+        <div className={styles.muted}>
+          A mix lasts only until something else moves the look — a slider,
+          mutate, a scene — and then the fills reset, since a blended look can’t
+          be traced back to exact amounts.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PresetButton(props: {
   def: PresetDef
   weight: number
   active: boolean
@@ -34,37 +79,51 @@ function PresetRow(props: {
   onMixStart: () => void
   onMix: (name: string, w: number) => void
 }) {
+  // Gesture bookkeeping only — nothing here should cause a render.
+  const dragRef = useRef<{ startX: number; moved: boolean } | null>(null)
+  const fill: CSSProperties & Record<'--w', string> = {
+    '--w': `${Math.round(props.weight * 100)}%`,
+  }
   return (
-    <div className={styles.presetRow}>
-      <button
-        title={props.def.blurb}
-        className={cx(
-          styles.btn,
-          styles.presetApply,
-          props.active && styles.active,
-          props.edited && styles.edited,
-        )}
-        onClick={() => props.onApply(props.def.name, props.def.patch)}
-      >
-        {props.def.name}
-        {props.edited ? ' •' : ''}
-      </button>
-      <input
-        type="range"
-        className={styles.presetWeight}
-        min={0}
-        max={1}
-        step={0.01}
-        value={props.weight}
-        aria-label={`mix in ${props.def.name}`}
-        title={`drag to mix ${props.def.name} into the current look`}
-        // Rebaseline onto the live look before the first change, on pointer or
-        // keyboard, so the mix layers on instead of reverting whatever is live.
-        onPointerDown={props.onMixStart}
-        onKeyDown={props.onMixStart}
-        onChange={e => props.onMix(props.def.name, e.currentTarget.valueAsNumber)}
-      />
-    </div>
+    <button
+      title={`${props.def.blurb} — drag sideways to mix it in partially`}
+      style={fill}
+      className={cx(
+        styles.btn,
+        styles.presetBtn,
+        props.active && styles.active,
+        props.edited && styles.edited,
+      )}
+      onPointerDown={e => {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        dragRef.current = { startX: e.clientX, moved: false }
+        props.onMixStart()
+      }}
+      onPointerMove={e => {
+        const d = dragRef.current
+        if (
+          d !== null &&
+          (d.moved || Math.abs(e.clientX - d.startX) > DRAG_SLOP)
+        ) {
+          d.moved = true
+          const r = e.currentTarget.getBoundingClientRect()
+          const x = (e.clientX - r.left) / r.width
+          props.onMix(props.def.name, Math.max(0, Math.min(1, x)))
+        }
+      }}
+      onPointerUp={() => {
+        const d = dragRef.current
+        dragRef.current = null
+        if (d !== null && !d.moved)
+          props.onApply(props.def.name, props.def.patch)
+      }}
+      onPointerCancel={() => {
+        dragRef.current = null
+      }}
+    >
+      {props.def.name}
+      {props.edited ? ' •' : ''}
+    </button>
   )
 }
 
@@ -84,6 +143,7 @@ export function PresetsSection(props: {
   canUndo: boolean
   onUndo: () => void
 }) {
+  const [showHelp, setShowHelp] = useState(false)
   const active = matchPreset(props.controls)
   const presetCaption = active
     ? active.blurb
@@ -92,12 +152,27 @@ export function PresetsSection(props: {
       : `modified from "${props.lastPreset}"`
 
   return (
-    <Section title="Presets">
+    <Section
+      title="Presets"
+      help={
+        <button
+          className={styles.helpBtn}
+          style={{ marginLeft: 6 }}
+          title="what are presets?"
+          onClick={e => {
+            e.stopPropagation()
+            setShowHelp(true)
+          }}
+        >
+          ?
+        </button>
+      }
+    >
       {PRESET_GROUPS.map(grp => (
         <div key={grp.name} style={{ margin: '2px 0 4px' }}>
           <div className={styles.grpLabel}>{grp.name}</div>
           {grp.defs.map(p => (
-            <PresetRow
+            <PresetButton
               key={p.name}
               def={p}
               weight={props.weights.get(p.name) ?? 0}
@@ -142,9 +217,12 @@ export function PresetsSection(props: {
         undo
       </button>
       <div className={styles.hint}>
-        click a preset for its look, or drag its slider to mix it in · “clean”
-        resets everything · hold C to compare · f for fullscreen
+        click a preset, or drag it sideways to mix it in · “clean” resets
+        everything · hold C to compare · f for fullscreen
       </div>
+      {showHelp ? (
+        <PresetsHelpDialog onClose={() => setShowHelp(false)} />
+      ) : null}
     </Section>
   )
 }
