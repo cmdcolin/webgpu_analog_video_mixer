@@ -263,6 +263,12 @@
   align-items: flex-start;
   gap: 6px;
 }
+.hintIcon {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: #c9a94a;
+  margin-top: 1px;
+}
 .hintX {
   flex-shrink: 0;
   padding: 0 2px;

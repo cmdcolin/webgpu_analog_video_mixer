@@ -2,6 +2,7 @@ import { useRef, useState, type CSSProperties } from 'react'
 import type { Controls } from '../controls'
 import styles from '../app.module.css'
 import { cx } from './cx'
+import { BulbIcon } from './icons'
 import { Section } from './Section'
 import {
   matchPreset,
@@ -183,6 +184,9 @@ export function PresetsSection(props: {
     >
       {hintDismissed ? null : (
         <div className={cx(styles.hint, styles.dismissHint)}>
+          <span className={styles.hintIcon}>
+            <BulbIcon />
+          </span>
           <span>
             click and drag on buttons to partially apply · “clean” resets
             everything · hold C to compare · f for fullscreen
