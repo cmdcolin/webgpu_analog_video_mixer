@@ -11,7 +11,7 @@ export async function initGpu(canvas: HTMLCanvasElement): Promise<Gpu> {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!navigator.gpu) {
     throw new WebGpuUnavailableError(
-      'This browser has no WebGPU support. Use Chrome/Edge 113+, or Firefox (stable 141+, or Nightly with dom.webgpu.enabled).',
+      'This browser has no WebGPU support. Try a recent Chrome, Edge, or Firefox — check caniuse.com/webgpu for current support.',
     )
   }
   const adapter = await navigator.gpu.requestAdapter()

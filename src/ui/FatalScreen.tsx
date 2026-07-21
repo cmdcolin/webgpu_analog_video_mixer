@@ -28,7 +28,7 @@ export function FatalScreen({ fatal }: { fatal: Fatal }) {
             <p className={shared.muted} style={{ margin: '0 0 14px' }}>
               Here's what it does. This app renders the entire NTSC signal path
               in WebGPU compute shaders, so a WebGPU-capable browser with working
-              hardware acceleration is required — there is no 2D-canvas fallback.
+              hardware acceleration is required — there is no fallback rendering path.
             </p>
             <p className={shared.muted} style={{ margin: 0 }}>
               Check support at{' '}
