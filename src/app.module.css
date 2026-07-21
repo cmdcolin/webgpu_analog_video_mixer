@@ -177,14 +177,29 @@
   border-color: #26262e;
 }
 
-/* Preset buttons double as weight sliders: drag one sideways to dial the
-   preset in partially, and the fill shows how much of it is in the mix. */
-.presetBtn {
-  background: linear-gradient(
-    to right,
-    #3a6355 var(--w, 0%),
-    #26262e var(--w, 0%)
-  );
+/* A preset is a named apply button next to its own weight slider: click the
+   name for the look outright, drag the slider to mix it into the current one. */
+.presetRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+}
+.presetApply {
+  flex: 0 0 auto;
+  width: 104px;
+  margin: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.presetWeight {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 16px;
+  accent-color: #3a6355;
+  cursor: pointer;
   touch-action: none;
 }
 
