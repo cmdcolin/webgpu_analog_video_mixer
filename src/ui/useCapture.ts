@@ -24,7 +24,11 @@ function save(blob: Blob, name: string) {
 
 // Prefer VP9, then fall through the codecs a given browser actually ships.
 function pickMime(): string {
-  const codecs = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+  const codecs = [
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm',
+  ]
   return codecs.find(t => MediaRecorder.isTypeSupported(t)) ?? 'video/webm'
 }
 
@@ -53,7 +57,9 @@ export function useCapture(
   canvasRef: RefObject<HTMLCanvasElement | null>,
   name: string,
 ) {
-  const recRef = useRef<{ rec: MediaRecorder; stream: MediaStream } | null>(null)
+  const recRef = useRef<{ rec: MediaRecorder; stream: MediaStream } | null>(
+    null,
+  )
   const rafRef = useRef(0)
   const [recording, setRecording] = useState(false)
 
@@ -61,10 +67,15 @@ export function useCapture(
     const canvas = canvasRef.current
     if (canvas !== null) {
       const mirror = mirrorOf(canvas)
-      mirror.draw()
-      mirror.canvas.toBlob(blob => {
-        if (blob !== null) save(blob, fileName(name, 'png'))
-      }, 'image/png')
+      // Draw inside a frame: Chrome only keeps the WebGPU drawing buffer
+      // readable during a paint, so a synchronous drawImage from the event
+      // handler copies a blank buffer.
+      requestAnimationFrame(() => {
+        mirror.draw()
+        mirror.canvas.toBlob(blob => {
+          if (blob !== null) save(blob, fileName(name, 'png'))
+        }, 'image/png')
+      })
     }
   }
 
