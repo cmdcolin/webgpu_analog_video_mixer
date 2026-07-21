@@ -28,6 +28,7 @@ import { ScenesSection } from './ui/ScenesSection'
 import { ModSection } from './ui/ModSection'
 import { MidiSection } from './ui/MidiSection'
 import { AudioSection } from './ui/AudioSection'
+import { VaporwaveSection } from './ui/VaporwaveSection'
 import { useAudio } from './ui/useAudio'
 import { useEngine } from './ui/useEngine'
 import { useMidi } from './ui/useMidi'
@@ -596,6 +597,22 @@ export function App() {
       />
 
       <ModSection engine={eng.engine} />
+
+      {eng.videoA || eng.videoB ? (
+        <VaporwaveSection
+          videoA={eng.videoA}
+          videoB={eng.videoB}
+          speedA={eng.speedA}
+          speedB={eng.speedB}
+          reverb={eng.reverb}
+          playAudio={eng.playAudio}
+          onSpeedA={eng.changeSpeedA}
+          onSpeedB={eng.changeSpeedB}
+          onReverb={eng.changeReverb}
+          onTogglePlayAudio={eng.toggleAudio}
+          onApplyPreset={eng.applyVaporwave}
+        />
+      ) : null}
 
       {AUDIO_GROUP === undefined ? null : (
         <AudioSection

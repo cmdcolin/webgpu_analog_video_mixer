@@ -11,7 +11,7 @@ export function YouTubeDialog(props: {
     <div className={styles.backdrop} onClick={props.onClose}>
       <div className={styles.card} onClick={e => e.stopPropagation()}>
         <div className={styles.cardRow} style={{ marginBottom: 10 }}>
-          <h2 style={{ fontSize: 15, margin: 0 }}>
+          <h2 className={styles.h2}>
             Load a YouTube video into source {props.slot.toUpperCase()}
           </h2>
           <button

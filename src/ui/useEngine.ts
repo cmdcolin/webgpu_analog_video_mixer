@@ -35,6 +35,12 @@ const ytId = (url: string): string => {
   return u.searchParams.get('v') ?? u.pathname.slice(1)
 }
 
+// Vaporwave playback defaults, shared with VaporwaveSection so each slider's
+// reset point matches the initial state. VAPORWAVE_SPEED is the one-click look.
+export const SPEED_DEFAULT = 1
+export const REVERB_DEFAULT = 0.3
+export const VAPORWAVE_SPEED = 0.66
+
 declare global {
   interface Window {
     vf?: Engine
@@ -63,6 +69,15 @@ export function useEngine() {
   const [askWebcam, setAskWebcam] = useState(false)
   // Which slot the YouTube URL dialog is loading into, or null when closed.
   const [askYouTube, setAskYouTube] = useState<'a' | 'b' | null>(null)
+  // Vaporwave playback: per-slot rate (pitch drops with it), whether the video
+  // audio is routed to the speakers + reactive path, and the reverb wet mix.
+  // videoA/videoB track whether each slot currently holds a live <video>.
+  const [speedA, setSpeedA] = useState(SPEED_DEFAULT)
+  const [speedB, setSpeedB] = useState(SPEED_DEFAULT)
+  const [playAudio, setPlayAudio] = useState(false)
+  const [reverb, setReverb] = useState(REVERB_DEFAULT)
+  const [videoA, setVideoA] = useState(false)
+  const [videoB, setVideoB] = useState(false)
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
   const [webcamDeviceId, setWebcamDeviceId] = useState('')
   const [sourceBMode, setSourceBMode] = useState<SourceBMode>('none')
@@ -96,6 +111,54 @@ export function useEngine() {
     applyCanvasSize()
   }
 
+  // Adopt the live video slots into the audio graph (or none, muting them all,
+  // when off) at the given reverb mix. Explicit args, so callers that also flip
+  // a setting pass the new value rather than reading stale state.
+  const routeAudio = (on: boolean, mix: number) => {
+    const els: HTMLVideoElement[] = []
+    for (const v of [videoRef.current, videoBRef.current]) {
+      if (v !== null) {
+        v.muted = !on
+        if (on) els.push(v)
+      }
+    }
+    engineRef.current?.audioState.routeMedia(els, mix)
+  }
+
+  const changeSpeedA = (rate: number) => {
+    setSpeedA(rate)
+    const v = videoRef.current
+    if (v !== null) {
+      v.defaultPlaybackRate = rate
+      v.playbackRate = rate
+    }
+  }
+  const changeSpeedB = (rate: number) => {
+    setSpeedB(rate)
+    const v = videoBRef.current
+    if (v !== null) {
+      v.defaultPlaybackRate = rate
+      v.playbackRate = rate
+    }
+  }
+  const toggleAudio = () => {
+    const on = !playAudio
+    setPlayAudio(on)
+    routeAudio(on, reverb)
+  }
+  const changeReverb = (mix: number) => {
+    setReverb(mix)
+    engineRef.current?.audioState.setReverbMix(mix)
+  }
+  // The vaporwave preset: slow both slots, dial in reverb, play out loud.
+  const applyVaporwave = () => {
+    changeSpeedA(VAPORWAVE_SPEED)
+    changeSpeedB(VAPORWAVE_SPEED)
+    setReverb(REVERB_DEFAULT)
+    setPlayAudio(true)
+    routeAudio(true, REVERB_DEFAULT)
+  }
+
   const stopVideo = () => {
     const v = videoRef.current
     if (v) {
@@ -106,7 +169,9 @@ export function useEngine() {
       if (v.src.startsWith('blob:')) URL.revokeObjectURL(v.src)
       v.removeAttribute('src')
       videoRef.current = null
+      engineRef.current?.audioState.releaseMedia(v)
     }
+    setVideoA(false)
     engineRef.current?.setVideoSource(null)
   }
 
@@ -126,7 +191,20 @@ export function useEngine() {
     v.addEventListener('playing', () =>
       console.log('DEBUG video playing', v.videoWidth, v.videoHeight),
     )
+    const isB = ref === videoBRef
+    // preservesPitch off means slowing the rate drops the pitch — the whole
+    // point. defaultPlaybackRate too, or loading the src resets playbackRate to
+    // 1. muted stays true until routeMedia adopts the element for output.
+    const rate = isB ? speedB : speedA
+    v.preservesPitch = false
+    v.defaultPlaybackRate = rate
+    v.playbackRate = rate
     ref.current = v
+    if (isB) setVideoB(true)
+    else setVideoA(true)
+    // A fresh clip is a new element the audio graph hasn't adopted; re-route so
+    // it's captured (and slowed audio keeps playing) when playback audio is on.
+    routeAudio(playAudio, reverb)
     return v
   }
 
@@ -281,7 +359,9 @@ export function useEngine() {
       if (v.src.startsWith('blob:')) URL.revokeObjectURL(v.src)
       v.removeAttribute('src')
       videoBRef.current = null
+      engineRef.current?.audioState.releaseMedia(v)
     }
+    setVideoB(false)
     engineRef.current?.setVideoSourceB(null)
   }
 
@@ -486,5 +566,16 @@ export function useEngine() {
     loadYouTubeB,
     askYouTube,
     setAskYouTube,
+    videoA,
+    videoB,
+    speedA,
+    speedB,
+    playAudio,
+    reverb,
+    changeSpeedA,
+    changeSpeedB,
+    toggleAudio,
+    changeReverb,
+    applyVaporwave,
   }
 }

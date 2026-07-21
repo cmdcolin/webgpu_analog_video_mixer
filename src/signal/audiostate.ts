@@ -55,11 +55,33 @@ export class AudioState {
   private lowPrev = 0
   private hitRef = HIT_FLOOR
   private stream: MediaStream | null = null
+  // Vaporwave media routing: a media element binds to one AudioContext for
+  // life, so its source is created once and cached here, disconnected while
+  // muted, and only evicted (releaseMedia) when the element is retired.
+  private mediaSources = new Map<HTMLMediaElement, MediaElementAudioSourceNode>()
+  private media: {
+    ctx: AudioContext
+    analyser: AnalyserNode
+    wet: GainNode
+    convolver: ConvolverNode
+  } | null = null
   level = 0
   hit = 0
 
   get active(): boolean {
     return this.analyser !== null
+  }
+
+  // Own the given context and size the analysis buffers to it, shared by the
+  // mic and media paths so the FFT size lives in one place.
+  private initAnalyser(ctx: AudioContext): AnalyserNode {
+    const analyser = ctx.createAnalyser()
+    analyser.fftSize = 2048
+    this.ctx = ctx
+    this.analyser = analyser
+    this.scratch = new Float32Array(analyser.fftSize)
+    this.spectrum = new Float32Array(analyser.frequencyBinCount)
+    return analyser
   }
 
   private connect(make: (ctx: AudioContext) => AudioNode): void {
@@ -69,13 +91,7 @@ export class AudioState {
     // gesture; the enable button is one, but autoplay policies still vary, so
     // ask explicitly rather than silently analysing digital silence.
     void ctx.resume()
-    const analyser = ctx.createAnalyser()
-    analyser.fftSize = 2048
-    make(ctx).connect(analyser)
-    this.ctx = ctx
-    this.analyser = analyser
-    this.scratch = new Float32Array(analyser.fftSize)
-    this.spectrum = new Float32Array(analyser.frequencyBinCount)
+    make(ctx).connect(this.initAnalyser(ctx))
   }
 
   async enableMic(): Promise<void> {
@@ -84,15 +100,67 @@ export class AudioState {
     this.stream = stream
   }
 
-  // Media elements can only ever be adopted by one AudioContext, so routing one
-  // through here means this graph owns its output from now on — hence the
-  // explicit reconnect to the destination, or the video would go silent.
-  attachMedia(el: HTMLMediaElement): void {
-    this.connect(ctx => {
-      const src = ctx.createMediaElementSource(el)
-      src.connect(ctx.destination)
-      return src
-    })
+  // A short decaying-noise impulse — a plausible hall tail for the reverb send.
+  private impulse(ctx: AudioContext): AudioBuffer {
+    const len = Math.floor(ctx.sampleRate * 2.5)
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate)
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch)
+      for (let i = 0; i < len; i++) {
+        d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3
+      }
+    }
+    return buf
+  }
+
+  // Build the media graph once (a mic context is mutually exclusive, so it's
+  // dropped first) and reuse it: convolver → wet → speakers is the reverb send,
+  // and sources also feed the analyser so the slowed track drives the artifacts.
+  private ensureMedia(): NonNullable<AudioState['media']> {
+    if (this.media === null) {
+      this.disconnect()
+      const ctx = new AudioContext()
+      const analyser = this.initAnalyser(ctx)
+      const wet = ctx.createGain()
+      const convolver = ctx.createConvolver()
+      convolver.buffer = this.impulse(ctx)
+      convolver.connect(wet).connect(ctx.destination)
+      this.media = { ctx, analyser, wet, convolver }
+    }
+    return this.media
+  }
+
+  // Route the given media elements' audio to the speakers and reverb send.
+  // Passing [] silences the graph but keeps the context and its per-element
+  // sources alive — a media element binds to one context for life, so tearing
+  // it down would strand elements still on screen. disconnect() truly closes it.
+  routeMedia(els: HTMLMediaElement[], reverb: number): void {
+    if (els.length > 0 || this.media !== null) {
+      const m = this.ensureMedia()
+      void m.ctx.resume()
+      for (const src of this.mediaSources.values()) src.disconnect()
+      for (const el of els) {
+        const src = this.mediaSources.get(el) ?? m.ctx.createMediaElementSource(el)
+        this.mediaSources.set(el, src)
+        src.connect(m.ctx.destination)
+        src.connect(m.analyser)
+        src.connect(m.convolver)
+      }
+      m.wet.gain.value = reverb
+    }
+  }
+
+  setReverbMix(reverb: number): void {
+    if (this.media !== null) this.media.wet.gain.value = reverb
+  }
+
+  // Drop an element's source when its <video> is retired for good (a new clip
+  // is a new element). Muting keeps a source cached — an element binds to one
+  // context for life and can't be re-adopted — so only true retirement evicts,
+  // which is why the element's owner has to signal it rather than routeMedia.
+  releaseMedia(el: HTMLMediaElement): void {
+    this.mediaSources.get(el)?.disconnect()
+    this.mediaSources.delete(el)
   }
 
   disconnect(): void {
@@ -101,6 +169,10 @@ export class AudioState {
     void this.ctx?.close()
     this.ctx = null
     this.analyser = null
+    // Sources belong to the closed context; drop them so a later routeMedia
+    // rebuilds fresh ones rather than reusing nodes from a dead graph.
+    this.mediaSources.clear()
+    this.media = null
     this.data.fill(0)
     this.level = 0
     this.hit = 0
