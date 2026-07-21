@@ -37,6 +37,7 @@ import { GEN_OFFSET, PARAM_BYTES, PRELUDE, packParams } from './prelude'
 import channelSrc from './shaders/channel.wgsl?raw'
 import chromaExtractSrc from './shaders/chroma_extract.wgsl?raw'
 import composeSrc from './shaders/compose.wgsl?raw'
+import composeBSrc from './shaders/compose_b.wgsl?raw'
 import crtFaceSrc from './shaders/crt_face.wgsl?raw'
 import decodeSrc from './shaders/decode.wgsl?raw'
 import timebaseSrc from './shaders/timebase.wgsl?raw'
@@ -141,6 +142,8 @@ export class Engine {
   private bEnabled = true
   // 0 = use srcTex; 1 = TV static; 2 = VHS static. Generated in compose.wgsl.
   private noiseSource = 0
+  // Same, for source B. Generated in compose_b.wgsl.
+  private noiseSourceB = 0
   private inputTex: GPUTexture
   private outTex: GPUTexture
   // The decoded frame rendered as a glowing CRT face (bloom/halation/glow).
@@ -258,7 +261,8 @@ export class Engine {
       texDesc(
         GPUTextureUsage.TEXTURE_BINDING |
           GPUTextureUsage.COPY_DST |
-          GPUTextureUsage.RENDER_ATTACHMENT,
+          GPUTextureUsage.RENDER_ATTACHMENT |
+          GPUTextureUsage.STORAGE_BINDING,
       ),
     )
     this.inputTex = d.createTexture(
@@ -297,6 +301,7 @@ export class Engine {
         compute: { module: module(src), entryPoint: 'main' },
       })
     this.composePl = compute(composeSrc)
+    const composeBPl = compute(composeBSrc)
     const encodeYuvPl = compute(encodeYuvSrc)
     const encodeCompositePl = compute(encodeCompositeSrc)
     const mixBPl = compute(mixBSrc)
@@ -378,6 +383,13 @@ export class Engine {
           { buffer: this.compA },
         ],
         perLine,
+      ),
+      pass(
+        'composeB',
+        composeBPl,
+        [{ buffer: this.paramsBuf }, this.srcTexB.createView()],
+        perTile,
+        () => bOn() && this.noiseSourceB > 0,
       ),
       pass(
         'encodeYuvB',
@@ -635,12 +647,22 @@ export class Engine {
   }
 
   setImageSourceB(source: OffscreenCanvas | ImageBitmap): void {
+    this.noiseSourceB = 0
     this.videoElB = null
     this.uploadB(source, source.width, source.height)
   }
 
   setVideoSourceB(el: HTMLVideoElement | null): void {
+    if (el !== null) this.noiseSourceB = 0
     this.videoElB = el
+  }
+
+  // Switch source B to a GPU-generated noise field (1 TV static, 2 VHS
+  // static); 0 restores the upload path. Any real image/video source clears
+  // this.
+  setNoiseSourceB(kind: number): void {
+    this.noiseSourceB = kind
+    this.videoElB = null
   }
 
   setSourceBEnabled(on: boolean): void {
@@ -803,6 +825,7 @@ export class Engine {
       canvasH: this.canvas.height,
       srcAspect: this.srcAspect,
       srcNoise: this.noiseSource,
+      srcNoiseB: this.noiseSourceB,
       invert: c.invert,
       deint: c.deint,
       chromaGain: c.chromaGain,

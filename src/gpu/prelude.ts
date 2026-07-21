@@ -42,6 +42,7 @@ export const PARAM_DEFS = [
   ['invert', 'f32'], // source A polarity flip: negate composite (0.5 = solarized)
   ['deint', 'f32'], // bob-deinterlace source A: rebuild from one field, killing capture combing
   // dirty mixer: source B is a second, non-genlocked composite signal
+  ['srcNoiseB', 'f32'], // GPU-generated source B: 0 texture, 1 TV static, 2 VHS blank-tape static
   ['bGain', 'f32'], // additive mix gain
   ['bRing', 'f32'], // ring modulation amount
   ['bRowOff', 'f32'], // vertical slip, lines (accumulated)

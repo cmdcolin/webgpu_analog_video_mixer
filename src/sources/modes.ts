@@ -11,6 +11,8 @@ export const SOURCE_B_MODES = [
   'none',
   'bars',
   'sweep',
+  'tv static',
+  'vhs static',
   'file',
   'youtube',
 ] as const

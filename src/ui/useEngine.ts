@@ -300,6 +300,8 @@ export function useEngine() {
         engine.setSourceBEnabled(mode !== 'none')
         if (mode === 'bars') engine.setImageSourceB(smpteBars())
         else if (mode === 'sweep') engine.setImageSourceB(sweep())
+        else if (mode === 'tv static') engine.setNoiseSourceB(1)
+        else if (mode === 'vhs static') engine.setNoiseSourceB(2)
       }
     }
   }
