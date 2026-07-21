@@ -1,5 +1,5 @@
 import { useState, type RefObject } from 'react'
-import type { FrameStats } from '../gpu/pipeline'
+import type { FrameStats } from '../controls'
 import { GearIcon } from './icons'
 import { FpsMonitor } from './FpsMonitor'
 import { cx } from './cx'

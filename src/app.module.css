@@ -177,6 +177,17 @@
   border-color: #26262e;
 }
 
+/* Preset buttons double as weight sliders: drag one sideways to dial the
+   preset in partially, and the fill shows how much of it is in the mix. */
+.presetBtn {
+  background: linear-gradient(
+    to right,
+    #3a6355 var(--w, 0%),
+    #26262e var(--w, 0%)
+  );
+  touch-action: none;
+}
+
 .grpLabel {
   color: #7a7a90;
   font-size: 10px;

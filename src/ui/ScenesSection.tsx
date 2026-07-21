@@ -1,4 +1,4 @@
-import type { Controls } from '../gpu/pipeline'
+import type { Controls } from '../controls'
 import styles from '../app.module.css'
 import { cx } from './cx'
 import { Section } from './Section'

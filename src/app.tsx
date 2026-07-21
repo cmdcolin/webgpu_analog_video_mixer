@@ -1,16 +1,16 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { DEFAULT_CONTROLS } from './controls'
 import type { ControlKey, Controls } from './controls'
 import { GROUPS, type Group } from './ui/controls'
 import { SYNCABLE_KEYS, SYNC_DIVISIONS, omit, syncedValue } from './ui/midi'
-import { matchPreset, presetControls } from './ui/presets'
+import {
+  CONTROL_KEYS,
+  blendPresets,
+  matchPreset,
+  presetControls,
+  type PresetWeights,
+} from './ui/presets'
 import { mutate } from './ui/mutate'
 import { useCapture } from './ui/useCapture'
 import { cx } from './ui/cx'
@@ -31,6 +31,7 @@ import { useAudio } from './ui/useAudio'
 import { useEngine } from './ui/useEngine'
 import { useMidi } from './ui/useMidi'
 import { usePopout } from './ui/usePopout'
+import { useUrlState } from './ui/useUrlState'
 import styles from './app.module.css'
 
 // useSyncExternalStore fallbacks for the window before the async engine exists.
@@ -99,7 +100,6 @@ export function App() {
   const [fullscreen, setFullscreen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [syncMap, setSyncMap] = useState<SyncMap>(loadSync)
   const [lastPreset, setLastPreset] = useState<string | null>(null)
   const [comparing, setComparing] = useState(false)
@@ -108,6 +108,12 @@ export function App() {
   // Single-level undo: the look from just before the last destructive apply
   // (preset, scene recall, or mutate), so a misclick is one keypress back.
   const [undoSnapshot, setUndoSnapshot] = useState<Controls | null>(null)
+  // Preset mix: how much of each preset is dialed in, over the look that was
+  // live when the mixing started. The engine still owns the controls — this is
+  // the recipe that produced them, kept only so a weight can be dragged back.
+  const [mix, setMix] = useState<{ base: Controls; weights: PresetWeights }>(
+    () => ({ base: DEFAULT_CONTROLS, weights: new Map() }),
+  )
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
@@ -132,6 +138,28 @@ export function App() {
   const applyPreset = (name: string, patch: Partial<Controls>) => {
     snapshotForUndo()
     writeControls(presetControls(patch))
+    setMix({ base: DEFAULT_CONTROLS, weights: new Map([[name, 1]]) })
+    setLastPreset(name)
+  }
+
+  // Anything outside the mix — a slider, MIDI, a mod slot, a scene recall — can
+  // have moved the controls since the last weight change. Whatever is live
+  // becomes the new baseline, so the next drag layers onto it instead of
+  // silently reverting it.
+  const startMix = () => {
+    const cur = engineRef.current?.getControls()
+    if (cur !== undefined) {
+      const mixed = blendPresets(mix.base, mix.weights)
+      if (CONTROL_KEYS.some(k => cur[k] !== mixed[k])) {
+        setMix({ base: cur, weights: new Map() })
+      }
+      setUndoSnapshot(cur)
+    }
+  }
+  const setPresetWeight = (name: string, w: number) => {
+    const weights = new Map(mix.weights).set(name, w)
+    writeControls(blendPresets(mix.base, weights))
+    setMix({ base: mix.base, weights })
     setLastPreset(name)
   }
 
@@ -339,51 +367,12 @@ export function App() {
     })
   }
 
-  // The full look lives in the query string so a reload or shared link restores
-  // it. The managed keys (set/src/srcb) are rewritten from the live state; any
-  // other params the loader reads (iurl, iurlb, vurl, preset, debug) are left
-  // untouched so a URL-loaded source survives later edits.
-  const stateUrl = useCallback(() => {
-    const set = (Object.keys(DEFAULT_CONTROLS) as ControlKey[])
-      .filter(k => controls[k] !== DEFAULT_CONTROLS[k])
-      .map(k => `${k}:${+controls[k].toFixed(4)}`)
-    // URLSearchParams so values with spaces (src=tv static) get encoded.
-    const q = new URLSearchParams(location.search)
-    if (set.length) q.set('set', set.join(','))
-    else q.delete('set')
-    if (eng.sourceMode !== 'bars' && eng.sourceMode !== 'file')
-      q.set('src', eng.sourceMode)
-    else q.delete('src')
-    if (eng.sourceBMode === 'bars' || eng.sourceBMode === 'sweep')
-      q.set('srcb', eng.sourceBMode)
-    else q.delete('srcb')
-    const query = q.toString()
-    return `${location.origin}${location.pathname}${query ? `?${query}` : ''}`
-  }, [controls, eng.sourceMode, eng.sourceBMode])
-
-  // Keep the address bar current on every change (replaceState, so it doesn't
-  // flood history). Trailing-debounced: a slider drag emits a move per frame,
-  // and the browser rate-limits the history API — so coalesce to one write once
-  // the value settles. Gated on the engine existing: before it does, `controls`
-  // is the default fallback and syncing would wipe the very params the loader
-  // is about to read.
-  useEffect(() => {
-    if (eng.engine !== null) {
-      const url = stateUrl()
-      const id = setTimeout(() => history.replaceState(null, '', url), 250)
-      return () => clearTimeout(id)
-    }
-  }, [eng.engine, stateUrl])
-
-  const copyLink = () => {
-    navigator.clipboard
-      .writeText(stateUrl())
-      .then(() => {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 1200)
-      })
-      .catch(() => {})
-  }
+  const { copyLink, copied } = useUrlState({
+    controls,
+    engineReady: eng.engine !== null,
+    sourceMode: eng.sourceMode,
+    sourceBMode: eng.sourceBMode,
+  })
 
   const audio = useAudio(eng.engine)
 
@@ -481,7 +470,10 @@ export function App() {
       <PresetsSection
         controls={controls}
         lastPreset={lastPreset}
+        weights={mix.weights}
         onApplyPreset={applyPreset}
+        onMixStart={startMix}
+        onMix={setPresetWeight}
         comparing={comparing}
         onStartCompare={startCompare}
         onEndCompare={endCompare}

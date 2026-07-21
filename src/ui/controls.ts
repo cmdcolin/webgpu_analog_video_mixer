@@ -1,4 +1,4 @@
-import type { ControlKey } from '../gpu/pipeline'
+import type { ControlKey } from '../controls'
 
 export interface SliderDef {
   key: ControlKey

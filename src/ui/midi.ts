@@ -1,4 +1,4 @@
-import type { ControlKey } from '../gpu/pipeline'
+import type { ControlKey } from '../controls'
 import { SLIDER_BY_KEY } from './controls'
 import type { SliderDef } from './controls'
 

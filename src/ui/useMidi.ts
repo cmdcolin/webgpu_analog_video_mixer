@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import type { ControlKey, Controls, Engine } from '../gpu/pipeline'
+import type { Engine } from '../gpu/pipeline'
+import type { ControlKey, Controls } from '../controls'
 import { createMidi } from './midi'
 import type { BindingMap, MidiManager, MidiStatus } from './midi'
 

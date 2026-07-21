@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FrameStats } from '../gpu/pipeline'
+import type { FrameStats } from '../controls'
 import styles from './FpsMonitor.module.css'
 
 // Always-on rolling histogram of recent per-window fps. Each bar is one stats

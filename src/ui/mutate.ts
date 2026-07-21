@@ -1,4 +1,4 @@
-import type { Controls } from '../gpu/pipeline'
+import type { Controls } from '../controls'
 import type { SliderDef } from './controls'
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))

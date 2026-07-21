@@ -1,4 +1,4 @@
-import type { ControlKey } from '../gpu/pipeline'
+import type { ControlKey } from '../controls'
 import styles from '../app.module.css'
 import { cx } from './cx'
 import { GROUPS } from './controls'

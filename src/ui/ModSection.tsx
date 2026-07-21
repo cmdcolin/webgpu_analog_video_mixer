@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { ControlKey, Engine, ModSlot } from '../gpu/pipeline'
+import type { Engine } from '../gpu/pipeline'
+import type { ControlKey, ModSlot } from '../controls'
 import type { ModSource } from '../signal/modstate'
 import { GROUPS, SLIDER_BY_KEY } from './controls'
 import { Section } from './Section'

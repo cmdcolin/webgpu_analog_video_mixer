@@ -1,5 +1,6 @@
-import type { ControlKey, Controls } from '../gpu/pipeline'
-import { DEFAULT_CONTROLS } from '../gpu/pipeline'
+import { DEFAULT_CONTROLS } from '../controls'
+import type { ControlKey, Controls } from '../controls'
+import { SLIDER_BY_KEY } from './controls'
 
 export interface PresetDef {
   name: string
@@ -372,7 +373,6 @@ export const PRESETS: PresetDef[] = [
       scanBeam: 0.45,
       scanBloom: 0.7,
       phosphor: 0.4,
-      noiseIre: 1.5,
     },
   },
   {
@@ -414,4 +414,64 @@ export function matchPreset(values: Controls): PresetDef | undefined {
   return PRESETS.find(p =>
     CONTROL_KEYS.every(k => presetControls(p.patch)[k] === values[k]),
   )
+}
+
+// How much of each preset is dialed in, by preset name. Absent or 0 is off.
+export type PresetWeights = ReadonlyMap<string, number>
+
+// Controls holding a mode rather than a quantity: halfway between phosphor 0
+// and 3 is not phosphor 1.5, it is a tube nobody asked for. The heaviest
+// preset that moves one of these off its default picks the mode outright.
+const ENUM_KEYS = new Set<ControlKey>([
+  'wipeMode',
+  'bendShape',
+  'combMode',
+  'phosphorMode',
+])
+
+// Snap a summed value back onto its slider's range and grid, so a mix lands on
+// values the UI can actually show and `matchPreset` can compare exactly.
+function quantize(key: ControlKey, v: number): number {
+  const s = SLIDER_BY_KEY.get(key)
+  return s === undefined
+    ? v
+    : Number(
+        (
+          Math.round(Math.min(s.max, Math.max(s.min, v)) / s.step) * s.step
+        ).toFixed(6),
+      )
+}
+
+// Presets mix by summing their departures from default onto `baseline`, so
+// dialing in two faults accumulates both instead of the later one winning.
+// Weight 1 on a single preset over the default baseline reproduces
+// `presetControls(patch)` exactly, which is what keeps `matchPreset` honest.
+export function blendPresets(
+  baseline: Controls,
+  weights: PresetWeights,
+): Controls {
+  const active = [...weights]
+    .filter(([, w]) => w > 0)
+    .sort(([, a], [, b]) => b - a)
+    .flatMap(([name, w]) => {
+      const def = PRESETS.find(p => p.name === name)
+      return def === undefined ? [] : [{ w, full: presetControls(def.patch) }]
+    })
+  const out = { ...baseline }
+  for (const k of CONTROL_KEYS) {
+    const moved = active.filter(a => a.full[k] !== DEFAULT_CONTROLS[k])
+    if (moved.length > 0) {
+      // `active` is heaviest-first, so the leading mover wins the enum keys.
+      out[k] = ENUM_KEYS.has(k)
+        ? moved[0].full[k]
+        : quantize(
+            k,
+            moved.reduce(
+              (acc, a) => acc + a.w * (a.full[k] - DEFAULT_CONTROLS[k]),
+              baseline[k],
+            ),
+          )
+    }
+  }
+  return out
 }
