@@ -276,6 +276,7 @@ export function App() {
       value={displayValue(s.key)}
       defaultValue={DEFAULT_CONTROLS[s.key]}
       onChange={v => writeControl(s.key, v)}
+      choices={s.choices}
       help={s.help}
       favorite={{
         on: favorites.has(s.key),

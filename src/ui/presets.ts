@@ -463,13 +463,11 @@ export type PresetWeights = ReadonlyMap<string, number>
 // Controls holding a mode rather than a quantity: halfway between phosphor 0
 // and 3 is not phosphor 1.5, it is a tube nobody asked for. The heaviest
 // preset that moves one of these off its default picks the mode outright.
-const ENUM_KEYS = new Set<ControlKey>([
-  'bGenlock',
-  'wipeMode',
-  'bendShape',
-  'combMode',
-  'phosphorMode',
-])
+// Derived from which controls declare `choices`, so the blender and the panel's
+// toggle groups can't drift from one hand-kept list.
+const ENUM_KEYS = new Set<ControlKey>(
+  [...SLIDER_BY_KEY.values()].filter(s => s.choices).map(s => s.key),
+)
 
 // Snap a summed value back onto its slider's range and grid, so a mix lands on
 // values the UI can actually show and `matchPreset` can compare exactly.

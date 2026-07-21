@@ -379,11 +379,12 @@ export const GROUPS: Group[] = [
     sliders: [
       {
         key: 'bGenlock',
-        label: 'genlock (0 dirty sum, 1 clean dissolve)',
+        label: 'genlock',
         min: 0,
         max: 1,
         step: 1,
         unit: '',
+        choices: ['dirty sum', 'clean dissolve'],
         help: "Whether source B is genlocked to the house reference. Off (0): B free-runs and is summed into the composite — a wiring fault, so its detune, roll and skew below drive fighting sync and chroma beats. On (1): B is re-encoded on A's carrier and raster and the combine becomes a clean crossfade — a production switcher dissolve, with B gain as the fader and the wipe as a clean B-replaces-A wipe. The detune/roll/skew and ring mod do nothing on this path.",
       },
       {
@@ -475,11 +476,12 @@ export const GROUPS: Group[] = [
     sliders: [
       {
         key: 'wipeMode',
-        label: 'pattern (0 off, h, v, box, diamond)',
+        label: 'pattern',
         min: 0,
         max: 4,
         step: 1,
         unit: '',
+        choices: ['off', 'h', 'v', 'box', 'diamond'],
         help: 'Selects the switcher wipe pattern that decides which parts of the frame show B instead of A: 0 off, 1 horizontal, 2 vertical, 3 box, 4 diamond.',
       },
       {
@@ -971,11 +973,12 @@ export const GROUPS: Group[] = [
     sliders: [
       {
         key: 'combMode',
-        label: 'Y/C comb (0 trap, 1-2 comb)',
+        label: 'Y/C comb',
         min: 0,
         max: 2,
         step: 1,
         unit: '',
+        choices: ['trap', '2-line', '3-line'],
         help: 'How the TV separates brightness from colour, which share one wire. 0 is a notch trap — cheap, and it mistakes fine detail for colour (rainbow fringing on stripes) and colour for detail (dot crawl on edges). 1 and 2 are 2- and 3-line combs, which use the line-to-line subcarrier alternation to separate them properly and largely kill both artifacts.',
       },
       {
@@ -1103,11 +1106,12 @@ export const GROUPS: Group[] = [
       },
       {
         key: 'phosphorMode',
-        label: 'phosphors (0 sRGB · 1 P22 · 2 1953 · 3 green)',
+        label: 'phosphors',
         min: 0,
         max: 3,
         step: 1,
         unit: '',
+        choices: ['sRGB', 'P22', '1953', 'green'],
         help: 'Which phosphors the tube is coated with, i.e. what its primaries actually are: 0 sRGB (no conversion), 1 P22/SMPTE-C (a normal colour TV), 2 the wide 1953 NTSC primaries nobody ever built, 3 a long-persistence monochrome green monitor.',
       },
       {

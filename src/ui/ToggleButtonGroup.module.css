@@ -1,0 +1,37 @@
+/* segmented toggle for discrete controls, in place of a range input */
+.group {
+  display: flex;
+  gap: 2px;
+  margin: 3px 0;
+}
+.button {
+  flex: 1;
+  padding: 3px 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #8888a0;
+  background: #26262e;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.button:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: #55555f;
+}
+.button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.button:focus-visible {
+  outline: 1px solid #5a5a68;
+  outline-offset: 1px;
+}
+.on {
+  color: #101014;
+  background: #4a7a62;
+  border-color: #4a7a62;
+}
+.on:hover:not(:disabled) {
+  color: #101014;
+}

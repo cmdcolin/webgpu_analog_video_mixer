@@ -2,6 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from 'react'
 import { cx } from './cx'
 import { formatValue } from './format'
 import { SliderHelpDialog } from './SliderHelpDialog'
+import { ToggleButtonGroup } from './ToggleButtonGroup'
 import styles from './Slider.module.css'
 
 // The readout's little accessory buttons (help, sync, MIDI, favorite, reset).
@@ -37,6 +38,9 @@ export function Slider(props: {
   value: number
   defaultValue: number
   onChange: (v: number) => void
+  // A discrete control: one label per integer value. Renders a toggle-button
+  // group in place of the range input, still reading/writing the same number.
+  choices?: string[]
   help?: string
   midi?: { label: string | null; armed: boolean; onArm: () => void }
   sync?: { label: string | null; live: boolean; onCycle: () => void }
@@ -47,6 +51,7 @@ export function Slider(props: {
   const sync = props.sync
   const help = props.help
   const favorite = props.favorite
+  const choices = props.choices
   const locked = sync?.label !== null && sync?.live === true
   // Track fill anchors at the default, not the left edge: bipolar controls
   // read like a pan pot from center, and distance-from-stock shows at a glance.
@@ -79,8 +84,9 @@ export function Slider(props: {
             )}
           </span>
           <span className={styles.value}>
-            {formatValue(props.value, props.step)}
-            {props.unit}
+            {choices
+              ? (choices[props.value] ?? props.value)
+              : `${formatValue(props.value, props.step)}${props.unit}`}
             {sync ? (
               <IconButton
                 title={
@@ -143,17 +149,27 @@ export function Slider(props: {
             </IconButton>
           </span>
         </span>
-        <input
-          type="range"
-          className={styles.range}
-          style={fill}
-          min={props.min}
-          max={props.max}
-          step={props.step}
-          value={props.value}
-          disabled={locked}
-          onChange={e => props.onChange(Number(e.target.value))}
-        />
+        {choices ? (
+          <ToggleButtonGroup
+            label={props.label}
+            options={choices}
+            value={props.value}
+            disabled={locked}
+            onChange={props.onChange}
+          />
+        ) : (
+          <input
+            type="range"
+            className={styles.range}
+            style={fill}
+            min={props.min}
+            max={props.max}
+            step={props.step}
+            value={props.value}
+            disabled={locked}
+            onChange={e => props.onChange(Number(e.target.value))}
+          />
+        )}
       </label>
       {showHelp && help !== undefined ? (
         <SliderHelpDialog
