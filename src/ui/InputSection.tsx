@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import styles from '../app.module.css'
 import {
   SOURCE_B_MODES,
@@ -12,6 +12,19 @@ import { GROUPS, type Group } from './controls'
 
 // A/B mix groups live next to the Input row, shown only when B is enabled.
 const AB_GROUPS = GROUPS.filter(g => g.ab)
+
+// The YouTube option is backed by the dev-only yt-dlp bridge, so hide it in
+// production builds where the /yt endpoint doesn't exist.
+const A_MODES = import.meta.env.DEV
+  ? SOURCE_MODES
+  : SOURCE_MODES.filter(m => m !== 'youtube')
+const B_MODES = import.meta.env.DEV
+  ? SOURCE_B_MODES
+  : SOURCE_B_MODES.filter(m => m !== 'youtube')
+
+// The source-name caption shows for loaded file/YouTube sources.
+const namedMode = (m: SourceMode | SourceBMode): boolean =>
+  m === 'file' || m === 'youtube'
 
 export function InputSection(props: {
   sourceMode: SourceMode
@@ -27,10 +40,8 @@ export function InputSection(props: {
   fileInputBRef: RefObject<HTMLInputElement | null>
   onFile: (file: File | undefined) => void
   onFileB: (file: File | undefined) => void
-  onLoadYouTube: (url: string) => void
   renderGroup: (group: Group, defaultOpen: boolean) => ReactNode
 }) {
-  const [yt, setYt] = useState('')
   return (
     <div>
       <div className={cx(styles.head, styles.static)}>Input</div>
@@ -46,40 +57,17 @@ export function InputSection(props: {
             if (m !== undefined) props.onSelectSource(m)
           }}
         >
-          {SOURCE_MODES.map(mode => (
+          {A_MODES.map(mode => (
             <option key={mode} value={mode}>
               {SOURCE_DESC[mode]}
             </option>
           ))}
         </select>
       </div>
-      {props.sourceMode === 'file' && props.sourceName !== '' ? (
+      {namedMode(props.sourceMode) && props.sourceName !== '' ? (
         <div className={styles.fileName} title={props.sourceName}>
           {props.sourceName}
         </div>
-      ) : null}
-      {import.meta.env.DEV ? (
-        <form
-          className={styles.inputRow}
-          onSubmit={e => {
-            e.preventDefault()
-            props.onLoadYouTube(yt)
-          }}
-        >
-          <span
-            className={styles.tag}
-            title="paste a YouTube URL, press Enter (dev only, via yt-dlp)"
-          >
-            ▶
-          </span>
-          <input
-            className={styles.select}
-            type="text"
-            placeholder="YouTube URL ↵"
-            value={yt}
-            onChange={e => setYt(e.target.value)}
-          />
-        </form>
       ) : null}
       {props.sourceMode === 'webcam' && props.videoDevices.length > 1 ? (
         <div className={styles.inputRow}>
@@ -111,14 +99,14 @@ export function InputSection(props: {
             if (m !== undefined) props.onSelectSourceB(m)
           }}
         >
-          {SOURCE_B_MODES.map(mode => (
+          {B_MODES.map(mode => (
             <option key={mode} value={mode}>
               {SOURCE_DESC[mode]}
             </option>
           ))}
         </select>
       </div>
-      {props.sourceBMode === 'file' && props.sourceBName !== '' ? (
+      {namedMode(props.sourceBMode) && props.sourceBName !== '' ? (
         <div className={styles.fileName} title={props.sourceBName}>
           {props.sourceBName}
         </div>

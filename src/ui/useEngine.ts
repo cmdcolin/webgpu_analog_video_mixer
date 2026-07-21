@@ -13,6 +13,15 @@ const loadImage = (url: string): Promise<ImageBitmap> =>
     .then(r => r.blob())
     .then(createImageBitmap)
 
+// Fetch a YouTube clip as a blob through the dev yt-dlp bridge
+// (vite-plugin-ytdlp). On failure the endpoint returns the yt-dlp error text.
+const fetchYouTube = (url: string): Promise<Blob> =>
+  fetch(`/yt?url=${encodeURIComponent(url)}`).then(r =>
+    r.ok
+      ? r.blob()
+      : r.text().then(t => Promise.reject(new Error(t || `${r.status}`))),
+  )
+
 // Last path segment of a URL, for labeling ?iurl/?vurl sources by name.
 const urlName = (url: string): string => {
   const path = new URL(url, location.href).pathname
@@ -52,6 +61,8 @@ export function useEngine() {
   // device list only carries labels once that grant lands — so both stay empty
   // until the user opts in.
   const [askWebcam, setAskWebcam] = useState(false)
+  // Which slot the YouTube URL dialog is loading into, or null when closed.
+  const [askYouTube, setAskYouTube] = useState<'a' | 'b' | null>(null)
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
   const [webcamDeviceId, setWebcamDeviceId] = useState('')
   const [sourceBMode, setSourceBMode] = useState<SourceBMode>('none')
@@ -133,6 +144,9 @@ export function useEngine() {
         // Defer stopVideo/setSourceMode until the user confirms in the dialog:
         // cancelling then leaves the current source (and its permission) alone.
         setAskWebcam(true)
+      } else if (mode === 'youtube') {
+        // Same deferral: wait for a URL in the dialog before touching state.
+        setAskYouTube('a')
       } else {
         stopVideo()
         setSourceMode(mode)
@@ -205,36 +219,58 @@ export function useEngine() {
     }
   }
 
-  // Fetches a YouTube clip through the dev yt-dlp bridge (vite-plugin-ytdlp),
-  // then feeds it to the same blob-backed <video> path as a picked file.
+  // Both A and B feed the clip through the same blob-backed <video> path as a
+  // picked file; the only difference is which slot's setters they drive.
   const loadYouTube = (url: string) => {
     const engine = engineRef.current
     const trimmed = url.trim()
     if (engine && trimmed !== '') {
       stopVideo()
       setError('')
-      setSourceMode('file')
+      setSourceMode('youtube')
       setSourceName(`youtube: ${ytId(trimmed)} — downloading…`)
-      fetch(`/yt?url=${encodeURIComponent(trimmed)}`)
-        .then(r =>
-          r.ok
-            ? r.blob()
-            : r.text().then(t => Promise.reject(new Error(t || `${r.status}`))),
-        )
-        .then(
-          blob => {
-            const v = makeVideo()
-            v.src = URL.createObjectURL(blob)
-            v.play()
-              .then(() => engine.setVideoSource(v))
-              .catch(() => {})
-            setSourceName(`youtube: ${ytId(trimmed)}`)
-          },
-          (e: unknown) => {
-            setError(`youtube: ${e instanceof Error ? e.message : String(e)}`)
-            setSourceName('')
-          },
-        )
+      fetchYouTube(trimmed).then(
+        blob => {
+          const v = makeVideo()
+          v.src = URL.createObjectURL(blob)
+          v.play()
+            .then(() => engine.setVideoSource(v))
+            .catch(() => {})
+          setSourceName(`youtube: ${ytId(trimmed)}`)
+        },
+        (e: unknown) => {
+          setError(`youtube: ${e instanceof Error ? e.message : String(e)}`)
+          setSourceName('')
+        },
+      )
+    }
+  }
+
+  const loadYouTubeB = (url: string) => {
+    const engine = engineRef.current
+    const trimmed = url.trim()
+    if (engine && trimmed !== '') {
+      stopVideoB()
+      setError('')
+      setSourceBMode('youtube')
+      setSourceBName(`youtube: ${ytId(trimmed)} — downloading…`)
+      engine.setSourceBEnabled(true)
+      fetchYouTube(trimmed).then(
+        blob => {
+          const v = makeVideo(videoBRef)
+          v.src = URL.createObjectURL(blob)
+          v.play()
+            .then(() => engine.setVideoSourceB(v))
+            .catch(() => {})
+          setSourceBName(`youtube: ${ytId(trimmed)}`)
+        },
+        (e: unknown) => {
+          setError(`youtube: ${e instanceof Error ? e.message : String(e)}`)
+          setSourceBName('')
+          setSourceBMode('none')
+          engine.setSourceBEnabled(false)
+        },
+      )
     }
   }
 
@@ -255,6 +291,8 @@ export function useEngine() {
       setError('') // entry for every B change (incl. file dialog); clear once
       if (mode === 'file') {
         fileInputBRef.current?.click()
+      } else if (mode === 'youtube') {
+        setAskYouTube('b')
       } else {
         stopVideoB()
         setSourceBMode(mode)
@@ -443,5 +481,8 @@ export function useEngine() {
     onFile,
     onFileB,
     loadYouTube,
+    loadYouTubeB,
+    askYouTube,
+    setAskYouTube,
   }
 }

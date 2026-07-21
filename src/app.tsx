@@ -20,6 +20,7 @@ import { Stage } from './ui/Stage'
 import { FatalScreen } from './ui/FatalScreen'
 import { HelpDialog } from './ui/HelpDialog'
 import { WebcamDialog } from './ui/WebcamDialog'
+import { YouTubeDialog } from './ui/YouTubeDialog'
 import { AdvancedDialog } from './ui/AdvancedDialog'
 import { InputSection } from './ui/InputSection'
 import { PresetsSection } from './ui/PresetsSection'
@@ -522,7 +523,6 @@ export function App() {
         fileInputBRef={eng.fileInputBRef}
         onFile={eng.onFile}
         onFileB={eng.onFileB}
-        onLoadYouTube={eng.loadYouTube}
         renderGroup={renderGroup}
       />
 
@@ -651,6 +651,17 @@ export function App() {
         <WebcamDialog
           onContinue={() => eng.startWebcam('')}
           onClose={() => eng.setAskWebcam(false)}
+        />
+      ) : null}
+      {eng.askYouTube !== null ? (
+        <YouTubeDialog
+          slot={eng.askYouTube}
+          onSubmit={url => {
+            if (eng.askYouTube === 'b') eng.loadYouTubeB(url)
+            else eng.loadYouTube(url)
+            eng.setAskYouTube(null)
+          }}
+          onClose={() => eng.setAskYouTube(null)}
         />
       ) : null}
       {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} /> : null}

@@ -4,9 +4,16 @@ export const SOURCE_MODES = [
   'tv static',
   'vhs static',
   'file',
+  'youtube',
   'webcam',
 ] as const
-export const SOURCE_B_MODES = ['none', 'bars', 'sweep', 'file'] as const
+export const SOURCE_B_MODES = [
+  'none',
+  'bars',
+  'sweep',
+  'file',
+  'youtube',
+] as const
 export type SourceMode = (typeof SOURCE_MODES)[number]
 export type SourceBMode = (typeof SOURCE_B_MODES)[number]
 
@@ -18,5 +25,6 @@ export const SOURCE_DESC: Record<SourceMode | SourceBMode, string> = {
   'tv static': 'TV static — no-signal broadcast snow',
   'vhs static': 'VHS static — blank-tape noise',
   file: 'File… — open an image or video',
+  youtube: 'YouTube… — fetch a URL via yt-dlp',
   webcam: 'Webcam / USB device — camera or RCA capture',
 }
