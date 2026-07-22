@@ -11,6 +11,7 @@ import { HelpDialog } from './ui/HelpDialog'
 import { InputSection } from './ui/InputSection'
 import { MidiSection } from './ui/MidiSection'
 import { ModSection } from './ui/ModSection'
+import { PipFrame } from './ui/PipFrame'
 import { PresetsSection } from './ui/PresetsSection'
 import { ScenesSection } from './ui/ScenesSection'
 import { Section } from './ui/Section'
@@ -18,6 +19,7 @@ import { Slider } from './ui/Slider'
 import { Stage } from './ui/Stage'
 import { VaporwaveSection } from './ui/VaporwaveSection'
 import { WebcamDialog } from './ui/WebcamDialog'
+import { WipeFrame } from './ui/WipeFrame'
 import { YouTubeDialog } from './ui/YouTubeDialog'
 import { GROUPS, NEEDS, PHASES, SLIDER_BY_KEY } from './ui/controls'
 import { cx } from './ui/cx'
@@ -62,6 +64,12 @@ const SYNCABLE_SET = new Set<ControlKey>(SYNCABLE_KEYS)
 
 // Stable empty weights, so a stale mix passes the same map every render.
 const NO_WEIGHTS: PresetWeights = new Map()
+
+// The inset geometry is dragged on a miniature of the picture instead of read
+// off four sliders; the sliders stay reachable through the filter box.
+const PIP_GROUP = 'PiP inset (source B)'
+const PIP_BOX_KEYS = new Set<ControlKey>(['pipX', 'pipY', 'pipW', 'pipH'])
+const WIPE_GROUP = 'Wipe (A/B)'
 
 // Which signal-path stage is expanded. Persisted so a reload keeps your place.
 const OPEN_GROUP_STORE = 'video_feedback_open_group'
@@ -363,7 +371,7 @@ export function App() {
   ) => {
     // Match help text too, not just labels: users hunt by artifact ("rainbow",
     // "ghost", "comb"), and the mechanism prose is where those words live.
-    const sliders =
+    const matched =
       query === '' || group.name.toLowerCase().includes(query)
         ? group.sliders
         : group.sliders.filter(
@@ -371,6 +379,15 @@ export function App() {
               s.label.toLowerCase().includes(query) ||
               s.help.toLowerCase().includes(query),
           )
+    // The miniatures replace the geometry sliders they duplicate; typing in
+    // the filter box brings those sliders back, MIDI and clock icons included.
+    const pipFrame = group.name === PIP_GROUP && query === ''
+    const wipeFrame = group.name === WIPE_GROUP && query === ''
+    const sliders = pipFrame
+      ? matched.filter(s => !PIP_BOX_KEYS.has(s.key))
+      : wipeFrame
+        ? matched.filter(s => s.key !== 'wipePos')
+        : matched
     const touched = group.sliders.some(
       s => controls[s.key] !== DEFAULT_CONTROLS[s.key],
     )
@@ -388,7 +405,7 @@ export function App() {
     }
     const banners = [...unmetCounts.values()].filter(e => e.n >= 3)
     const mutedNeeds = new Set(banners.map(e => e.need.key))
-    return sliders.length === 0 ? null : (
+    return sliders.length === 0 && !pipFrame && !wipeFrame ? null : (
       <Section
         key={group.name}
         title={group.name}
@@ -398,6 +415,31 @@ export function App() {
         open={control?.open}
         onToggle={control?.onToggle}
       >
+        {wipeFrame ? (
+          <WipeFrame
+            mode={controls.wipeMode}
+            pos={controls.wipePos}
+            inert={controls.wipeMode < 1}
+            onChange={pos => writeControl('wipePos', pos)}
+          />
+        ) : null}
+        {pipFrame ? (
+          <PipFrame
+            inert={controls.pipMix === 0}
+            box={{
+              x: controls.pipX,
+              y: controls.pipY,
+              w: controls.pipW,
+              h: controls.pipH,
+            }}
+            onChange={box => {
+              writeControl('pipX', box.x)
+              writeControl('pipY', box.y)
+              writeControl('pipW', box.w)
+              writeControl('pipH', box.h)
+            }}
+          />
+        ) : null}
         {banners.map(({ need, n }) => (
           <button
             key={need.key}

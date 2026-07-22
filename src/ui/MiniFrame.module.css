@@ -1,0 +1,77 @@
+/* Shared chrome for the direct-manipulation miniatures (PiP inset, A/B wipe):
+   a 4:3 stand-in for the active picture, driven in the same 0..1 UV space the
+   shaders read. */
+.wrap {
+  margin: 8px 0 10px;
+}
+.frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  border: 1px solid #3a3a48;
+  border-radius: 3px;
+  background: repeating-linear-gradient(0deg, #16161c 0 2px, #1b1b22 2px 4px);
+  touch-action: none;
+  overflow: hidden;
+}
+/* the control does nothing until its gate opens (inset key / wipe pattern) */
+.inert {
+  opacity: 0.4;
+}
+.window {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  cursor: move;
+  touch-action: none;
+}
+.window:focus-visible {
+  outline: 1px solid #8a8a98;
+  outline-offset: 2px;
+}
+.grip {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -5px 0 0 -5px;
+  box-sizing: border-box;
+  border: 1px solid #0c0c10;
+  background: var(--accent);
+  border-radius: 1px;
+  touch-action: none;
+}
+/* wipe: the B region, shaped by the pattern the generator runs */
+.region {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  pointer-events: none;
+}
+.side {
+  position: absolute;
+  font-size: 10px;
+  color: #8a8a98;
+  pointer-events: none;
+}
+.sideA {
+  right: 3px;
+  bottom: 2px;
+}
+.sideB {
+  left: 3px;
+  top: 2px;
+}
+.readout {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #8a8a98;
+}
+.nums {
+  color: var(--accent);
+  font-family: var(--mono);
+}
