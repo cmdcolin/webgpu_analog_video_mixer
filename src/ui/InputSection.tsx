@@ -22,11 +22,19 @@ const B_OPTIONS = B_MODES.map(m => ({ value: m, label: SOURCE_DESC[m] }))
 const namedMode = (m: SourceMode | SourceBMode): boolean =>
   m === 'file' || m === 'youtube'
 
-function FileName({ name }: { name: string }) {
+// Clicking the caption re-fires the source handler, reopening the file picker
+// (or YouTube URL dialog) — the native <select> can't re-emit onChange for the
+// already-selected option, so re-picking the same source lives here.
+function FileName({ name, onReopen }: { name: string; onReopen: () => void }) {
   return name === '' ? null : (
-    <div className={styles.fileName} title={name}>
+    <button
+      type="button"
+      className={styles.fileName}
+      title={`${name} — click to change`}
+      onClick={() => onReopen()}
+    >
       {name}
-    </div>
+    </button>
   )
 }
 
@@ -56,7 +64,10 @@ export function InputSection(props: {
           onChange={props.onSelectSource}
         />
         {namedMode(props.sourceMode) ? (
-          <FileName name={props.sourceName} />
+          <FileName
+            name={props.sourceName}
+            onReopen={() => props.onSelectSource(props.sourceMode)}
+          />
         ) : null}
         {props.sourceMode === 'webcam' && props.videoDevices.length > 1 ? (
           <SelectRow
@@ -78,7 +89,10 @@ export function InputSection(props: {
           onChange={props.onSelectSourceB}
         />
         {namedMode(props.sourceBMode) ? (
-          <FileName name={props.sourceBName} />
+          <FileName
+            name={props.sourceBName}
+            onReopen={() => props.onSelectSourceB(props.sourceBMode)}
+          />
         ) : null}
         {props.sourceBMode === 'none' ? (
           <div className={styles.hint}>
